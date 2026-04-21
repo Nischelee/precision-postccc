@@ -36,13 +36,9 @@ export default function Landing() {
       {/* Nav */}
       <nav style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: '0 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 72, position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 1px 8px rgba(13,33,68,0.06)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 8, background: C.navy, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: C.white, fontWeight: 800, fontSize: 14 }}>PP</span>
-          </div>
-          <div>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 16, color: C.navy, letterSpacing: '0.04em', textTransform: 'uppercase' }}>PRECISION POST</div>
-            <div style={{ fontSize: 10, color: C.midGray, letterSpacing: '0.1em', textTransform: 'uppercase' }}>CLEANING CO.</div>
-          </div>
+         
+
+<img src="https://i.imgur.com/9UVzMKd.png" alt="Precision Post Cleaning Co." style={{ height: 48, objectFit: 'contain' }} />
         </div>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
           <button onClick={() => navigate('/login')} style={{ background: 'transparent', border: `1.5px solid ${C.navy}`, color: C.navy, padding: '8px 20px', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Login</button>
