@@ -82,7 +82,6 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   const [showModal, setShowModal] = useState('')
   const [newService, setNewService] = useState({ name: '', description: '', base_price: '' })
   const [newJob, setNewJob] = useState({ title: '', type: 'Post-Construction', address: '', scheduled_date: '', scheduled_time: '', price: '', access_notes: '', client_id: '' })
-  const [mobileNav, setMobileNav] = useState(false)
 
   useEffect(() => { fetchAll() }, [])
 
@@ -105,6 +104,20 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
 
   const updateConsultation = async (id: string, status: string) => {
     await supabase.from('consultations').update({ status }).eq('id', id)
+    fetchAll()
+  }
+
+  const convertToJob = async (consultation: any) => {
+    await supabase.from('jobs').insert([{
+      title: `${consultation.service_type} - ${consultation.name}`,
+      type: consultation.service_type,
+      address: consultation.address,
+      status: 'scheduled',
+      price: 0,
+      notes: consultation.message,
+    }])
+    await updateConsultation(consultation.id, 'converted')
+    setTab('jobs')
     fetchAll()
   }
 
@@ -143,7 +156,6 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.offWhite, fontFamily: "'Barlow', sans-serif" }}>
-      {/* Sidebar */}
       <div style={{ width: 220, background: C.navy, display: 'flex', flexDirection: 'column' as const, flexShrink: 0, position: 'sticky' as const, top: 0, height: '100vh' }}>
         <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <div style={{ color: C.white, fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>PRECISION POST</div>
@@ -172,10 +184,8 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         </div>
       </div>
 
-      {/* Main */}
       <div style={{ flex: 1, padding: 28, overflowY: 'auto' as const }}>
 
-        {/* DASHBOARD */}
         {tab === 'dashboard' && (
           <div>
             <div style={{ marginBottom: 24 }}>
@@ -215,7 +225,6 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           </div>
         )}
 
-        {/* CONSULTATIONS */}
         {tab === 'consultations' && (
           <div>
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Consultation Requests</div>
@@ -246,14 +255,13 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           </div>
         )}
 
-        {/* JOBS */}
         {tab === 'jobs' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' as const, gap: 12 }}>
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const }}>Jobs</div>
               <Btn onClick={() => setShowModal('job')}>+ New Job</Btn>
             </div>
-            {jobs.map((job, i) => (
+            {jobs.map((job) => (
               <div key={job.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 10 }}>
                   <div>
@@ -275,7 +283,6 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           </div>
         )}
 
-        {/* CLIENTS */}
         {tab === 'clients' && (
           <div>
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Clients</div>
@@ -287,11 +294,10 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                 <div style={{ marginTop: 8 }}><Badge label={c.type || 'commercial'} color="navy" /></div>
               </div>
             ))}
-            {clients.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No clients yet. Clients are added when they register.</div>}
+            {clients.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No clients yet.</div>}
           </div>
         )}
 
-        {/* CLEANERS */}
         {tab === 'cleaners' && (
           <div>
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Cleaners</div>
@@ -311,11 +317,10 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                 </div>
               ))}
             </div>
-            {cleaners.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No cleaners yet. Cleaners are added when they register.</div>}
+            {cleaners.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No cleaners yet.</div>}
           </div>
         )}
 
-        {/* INVOICES */}
         {tab === 'invoices' && (
           <div>
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Invoices</div>
@@ -352,7 +357,6 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           </div>
         )}
 
-        {/* SERVICES */}
         {tab === 'services' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' as const, gap: 12 }}>
@@ -372,7 +376,6 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           </div>
         )}
 
-        {/* MESSAGES */}
         {tab === 'messages' && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, flexDirection: 'column' as const, gap: 12 }}>
             <div style={{ fontSize: 40 }}>💬</div>
@@ -382,7 +385,6 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         )}
       </div>
 
-      {/* Add Service Modal */}
       {showModal === 'service' && (
         <Modal title="Add Service" onClose={() => setShowModal('')}>
           <Input label="Service Name" value={newService.name} onChange={(e: any) => setNewService(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Post-Construction Clean" />
@@ -395,7 +397,6 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         </Modal>
       )}
 
-      {/* Add Job Modal */}
       {showModal === 'job' && (
         <Modal title="New Job" onClose={() => setShowModal('')}>
           <Input label="Job Title" value={newJob.title} onChange={(e: any) => setNewJob(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Riverside Construction Final Clean" />
