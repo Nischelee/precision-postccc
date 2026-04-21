@@ -237,7 +237,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                 {c.status === 'new' && (
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
                     <Btn onClick={() => updateConsultation(c.id, 'contacted')} style={{ padding: '7px 16px', fontSize: 12 }}>Mark Contacted</Btn>
-                    <Btn onClick={() => updateConsultation(c.id, 'converted')} variant="outline" style={{ padding: '7px 16px', fontSize: 12 }}>Convert to Job</Btn>
+                    <Btn onClick={() => convertToJob(c)} variant="outline" style={{ padding: '7px 16px', fontSize: 12 }}>Convert to Job</Btn>
                     <Btn onClick={() => updateConsultation(c.id, 'declined')} variant="outline" style={{ padding: '7px 16px', fontSize: 12, borderColor: C.midGray, color: C.midGray }}>Decline</Btn>
                   </div>
                 )}
