@@ -18,6 +18,7 @@ const C = {
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: '◈' },
   { id: 'consultations', label: 'Consultations', icon: '📬' },
+  { id: 'quotes', label: 'Quotes', icon: '📄' },
   { id: 'jobs', label: 'Jobs', icon: '📋' },
   { id: 'clients', label: 'Clients', icon: '👤' },
   { id: 'cleaners', label: 'Cleaners', icon: '👥' },
@@ -63,6 +64,13 @@ const Input = ({ label, ...props }: any) => (
   </div>
 )
 
+const Textarea = ({ label, ...props }: any) => (
+  <div style={{ marginBottom: 14 }}>
+    {label && <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>{label}</label>}
+    <textarea {...props} style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '10px 14px', outline: 'none', boxSizing: 'border-box' as const, resize: 'vertical' as const, minHeight: 80, fontFamily: 'inherit' }} />
+  </div>
+)
+
 const Btn = ({ children, onClick, variant = 'primary', style: s }: any) => (
   <button onClick={onClick} style={{
     background: variant === 'primary' ? C.red : 'transparent',
@@ -76,6 +84,7 @@ const Btn = ({ children, onClick, variant = 'primary', style: s }: any) => (
 export default function OwnerDashboard({ profile }: { profile: any }) {
   const [tab, setTab] = useState('dashboard')
   const [consultations, setConsultations] = useState<any[]>([])
+  const [quotes, setQuotes] = useState<any[]>([])
   const [jobs, setJobs] = useState<any[]>([])
   const [clients, setClients] = useState<any[]>([])
   const [cleaners, setCleaners] = useState<any[]>([])
@@ -85,6 +94,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   const [jobCleaners, setJobCleaners] = useState<any[]>([])
   const [showModal, setShowModal] = useState('')
   const [selectedJob, setSelectedJob] = useState<any>(null)
+  const [selectedConsultation, setSelectedConsultation] = useState<any>(null)
   const [selectedCleaner, setSelectedCleaner] = useState('')
   const [confirmAction, setConfirmAction] = useState<any>(null)
   const [calcJobCost, setCalcJobCost] = useState('')
@@ -92,6 +102,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   const [newService, setNewService] = useState({ name: '', description: '', base_price: '' })
   const [newAddon, setNewAddon] = useState({ name: '', price: '' })
   const [invoiceForm, setInvoiceForm] = useState<any>(null)
+  const [quoteForm, setQuoteForm] = useState<any>(null)
   const [newJob, setNewJob] = useState({
     title: '', type: 'Post-Construction', address: '',
     scheduled_date: '', scheduled_time: '', price: '',
@@ -102,8 +113,9 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   useEffect(() => { fetchAll() }, [])
 
   const fetchAll = async () => {
-    const [c, j, cl, cn, i, s, jc, ao] = await Promise.all([
+    const [c, q, j, cl, cn, i, s, jc, ao] = await Promise.all([
       supabase.from('consultations').select('*').order('created_at', { ascending: false }),
+      supabase.from('quotes').select('*, clients(profiles(full_name))').order('created_at', { ascending: false }),
       supabase.from('jobs').select('*').order('scheduled_date', { ascending: true }),
       supabase.from('clients').select('*, profiles(full_name, email, phone)').order('created_at', { ascending: false }),
       supabase.from('cleaners').select('*, profiles(full_name, email, phone)').order('created_at', { ascending: false }),
@@ -113,6 +125,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
       supabase.from('services').select('*').eq('is_addon', true).order('created_at', { ascending: false }),
     ])
     setConsultations(c.data || [])
+    setQuotes(q.data || [])
     setJobs(j.data || [])
     setClients(cl.data || [])
     setCleaners(cn.data || [])
@@ -138,6 +151,56 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     }])
     await updateConsultation(consultation.id, 'converted')
     setTab('jobs')
+    fetchAll()
+  }
+
+  const openQuoteModal = (consultation: any) => {
+    setSelectedConsultation(consultation)
+    setQuoteForm({
+      consultation_id: consultation.id,
+      client_id: '',
+      services: consultation.service_type || '',
+      description: consultation.message || '',
+      total_amount: '',
+      status: 'draft',
+    })
+    setShowModal('quote')
+  }
+
+  const saveQuote = async () => {
+    if (!quoteForm || !quoteForm.total_amount) return
+    const total = Number(quoteForm.total_amount)
+    const deposit = total * 0.6
+    const balance = total * 0.4
+    const { error } = await supabase.from('quotes').insert([{
+      consultation_id: quoteForm.consultation_id,
+      client_id: quoteForm.client_id || null,
+      services: quoteForm.services,
+      description: quoteForm.description,
+      total_amount: total,
+      deposit_amount: deposit,
+      balance_amount: balance,
+      status: 'draft',
+    }])
+    if (error) { alert('Error: ' + error.message); return }
+    setShowModal('')
+    setQuoteForm(null)
+    fetchAll()
+    setTab('quotes')
+  }
+
+  const updateQuoteStatus = async (id: string, status: string) => {
+    await supabase.from('quotes').update({ status }).eq('id', id)
+    fetchAll()
+  }
+
+  const markDepositPaid = async (id: string, method: string) => {
+    await supabase.from('quotes').update({
+      deposit_paid: true,
+      deposit_paid_at: new Date().toISOString(),
+      deposit_payment_method: method,
+      status: 'accepted'
+    }).eq('id', id)
     fetchAll()
   }
 
@@ -190,15 +253,10 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
       return sum + (addon?.base_price || 0)
     }, 0)
     await supabase.from('jobs').insert([{
-      title: newJob.title,
-      type: newJob.type,
-      address: newJob.address,
-      scheduled_date: newJob.scheduled_date,
-      scheduled_time: newJob.scheduled_time,
-      price: Number(newJob.price) + addonCost,
-      access_notes: newJob.access_notes,
-      client_id: newJob.client_id || null,
-      status: 'scheduled',
+      title: newJob.title, type: newJob.type, address: newJob.address,
+      scheduled_date: newJob.scheduled_date, scheduled_time: newJob.scheduled_time,
+      price: Number(newJob.price) + addonCost, access_notes: newJob.access_notes,
+      client_id: newJob.client_id || null, status: 'scheduled',
       recurring: newJob.recurring || null,
       notes: newJob.selected_addons.length > 0 ? `Add-ons: ${newJob.selected_addons.map(id => addons.find((a: any) => a.id === id)?.name).join(', ')}` : '',
     }])
@@ -207,17 +265,24 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     fetchAll()
   }
 
-  const openInvoiceModal = (job: any) => {
+  const openInvoiceModal = async (job: any) => {
+    const existing = invoices.find(i => i.job_id === job.id)
+    if (existing) {
+      const client = clients.find(c => c.id === existing.client_id)
+      setInvoiceForm({ ...existing, job_title: job.title, client_name: client?.profiles?.full_name || existing.clients?.profiles?.full_name || 'No client', editing: true })
+      setShowModal('invoice')
+      return
+    }
+    const invNum = `INV-${String(invoices.length + 1).padStart(3, '0')}`
     const client = clients.find(c => c.id === job.client_id)
     setInvoiceForm({
-      job_id: job.id,
-      job_title: job.title,
+      job_id: job.id, job_title: job.title,
       client_name: client?.profiles?.full_name || 'No client assigned',
       client_id: job.client_id || null,
       amount: job.price || 0,
+      invoice_number: invNum,
       due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      notes: '',
-      editing: false,
+      notes: '', payment_method: '', editing: false,
     })
     setShowModal('invoice')
   }
@@ -229,6 +294,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         amount: Number(invoiceForm.amount),
         due_date: invoiceForm.due_date,
         notes: invoiceForm.notes || '',
+        payment_method: invoiceForm.payment_method || null,
       }).eq('id', invoiceForm.id)
       if (error) { alert('Error: ' + error.message); return }
     } else {
@@ -239,6 +305,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         status: 'pending',
         due_date: invoiceForm.due_date,
         notes: invoiceForm.notes || '',
+        invoice_number: invoiceForm.invoice_number,
       }])
       if (error) { alert('Error: ' + error.message); return }
     }
@@ -269,11 +336,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   const todayJobs = jobs.filter(j => j.scheduled_date === new Date().toISOString().split('T')[0])
 
   const calcResult = calcJobCost && calcWorkers
-    ? {
-        workerPool: Number(calcJobCost) * 0.4,
-        perWorker: (Number(calcJobCost) * 0.4) / Number(calcWorkers),
-        business: Number(calcJobCost) * 0.6
-      }
+    ? { workerPool: Number(calcJobCost) * 0.4, perWorker: (Number(calcJobCost) * 0.4) / Number(calcWorkers), business: Number(calcJobCost) * 0.6 }
     : null
 
   return (
@@ -367,16 +430,64 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                 </div>
                 {(c.status === 'new' || c.status === 'contacted') && (
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
-                    {c.status === 'new' && (
-                      <Btn onClick={() => updateConsultation(c.id, 'contacted')} style={{ padding: '7px 16px', fontSize: 12 }}>Mark Contacted</Btn>
-                    )}
+                    {c.status === 'new' && <Btn onClick={() => updateConsultation(c.id, 'contacted')} style={{ padding: '7px 16px', fontSize: 12 }}>Mark Contacted</Btn>}
+                    <Btn onClick={() => openQuoteModal(c)} variant="outline" style={{ padding: '7px 16px', fontSize: 12 }}>📄 Generate Quote</Btn>
                     <Btn onClick={() => convertToJob(c)} variant="outline" style={{ padding: '7px 16px', fontSize: 12 }}>Convert to Job</Btn>
                     <Btn onClick={() => updateConsultation(c.id, 'declined')} variant="outline" style={{ padding: '7px 16px', fontSize: 12, borderColor: C.midGray, color: C.midGray }}>Decline</Btn>
                   </div>
                 )}
-                {c.status === 'declined' && (
-                  <Btn onClick={() => updateConsultation(c.id, 'new')} variant="outline" style={{ padding: '7px 16px', fontSize: 12 }}>Reopen</Btn>
+                {c.status === 'declined' && <Btn onClick={() => updateConsultation(c.id, 'new')} variant="outline" style={{ padding: '7px 16px', fontSize: 12 }}>Reopen</Btn>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'quotes' && (
+          <div>
+            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Quotes</div>
+            {quotes.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No quotes yet. Generate one from a consultation.</div>}
+            {quotes.map(q => (
+              <div key={q.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, marginBottom: 12, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10, marginBottom: 12 }}>
+                  <div>
+                    <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{q.clients?.profiles?.full_name || 'No client linked'}</div>
+                    <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{q.services}</div>
+                    <div style={{ color: C.darkGray, fontSize: 13, marginTop: 4 }}>{q.description}</div>
+                  </div>
+                  <Badge label={q.status} color={q.status === 'accepted' ? 'green' : q.status === 'declined' ? 'red' : q.status === 'sent' ? 'yellow' : 'gray'} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+                  <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>${q.total_amount?.toLocaleString()}</div>
+                    <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>Total</div>
+                  </div>
+                  <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: q.deposit_paid ? '#109648' : C.red }}>${q.deposit_amount?.toLocaleString()}</div>
+                    <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>60% Deposit {q.deposit_paid ? '✓ Paid' : '- Due Before Start'}</div>
+                  </div>
+                  <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>${q.balance_amount?.toLocaleString()}</div>
+                    <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>40% Balance - On Completion</div>
+                  </div>
+                </div>
+                {q.deposit_paid && (
+                  <div style={{ background: 'rgba(16,150,72,0.08)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 12, color: '#109648' }}>
+                    ✅ Deposit paid via {q.deposit_payment_method} on {new Date(q.deposit_paid_at).toLocaleDateString()}
+                  </div>
                 )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                  {q.status === 'draft' && <Btn onClick={() => updateQuoteStatus(q.id, 'sent')} style={{ padding: '6px 14px', fontSize: 12 }}>Mark as Sent</Btn>}
+                  {q.status === 'sent' && <Btn onClick={() => updateQuoteStatus(q.id, 'accepted')} variant="outline" style={{ padding: '6px 14px', fontSize: 12 }}>Mark Accepted</Btn>}
+                  {!q.deposit_paid && q.status === 'accepted' && (
+                    <>
+                      <div style={{ color: C.midGray, fontSize: 12, alignSelf: 'center' }}>Deposit payment:</div>
+                      <Btn onClick={() => markDepositPaid(q.id, 'square')} style={{ padding: '6px 12px', fontSize: 11 }}>Square</Btn>
+                      <Btn onClick={() => markDepositPaid(q.id, 'zelle')} variant="outline" style={{ padding: '6px 12px', fontSize: 11 }}>Zelle</Btn>
+                      <Btn onClick={() => markDepositPaid(q.id, 'cash')} variant="outline" style={{ padding: '6px 12px', fontSize: 11 }}>Cash</Btn>
+                    </>
+                  )}
+                  {q.status !== 'declined' && <Btn onClick={() => updateQuoteStatus(q.id, 'declined')} variant="outline" style={{ padding: '6px 14px', fontSize: 12, borderColor: C.midGray, color: C.midGray }}>Decline</Btn>}
+                </div>
               </div>
             ))}
           </div>
@@ -445,7 +556,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Clients</div>
             {clients.map(c => (
               <div key={c.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10, marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10 }}>
                   <div>
                     <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{c.profiles?.full_name}</div>
                     <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>✉️ {c.profiles?.email}</div>
@@ -523,13 +634,17 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
               <div key={inv.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10 }}>
                   <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                      <span style={{ color: C.midGray, fontSize: 11, fontWeight: 700 }}>{inv.invoice_number || 'INV'}</span>
+                      <Badge label={inv.status} color={inv.status === 'paid' ? 'green' : inv.status === 'overdue' ? 'red' : 'yellow'} />
+                    </div>
                     <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{inv.clients?.profiles?.full_name || 'Client'}</div>
-                    <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>Due: {inv.due_date} · {inv.payment_method || 'Unpaid'}</div>
+                    <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>Due: {inv.due_date}</div>
+                    {inv.status === 'paid' && inv.paid_at && <div style={{ color: '#109648', fontSize: 12 }}>✅ Paid {new Date(inv.paid_at).toLocaleDateString()} via {inv.payment_method}</div>}
                     {inv.notes && <div style={{ color: C.darkGray, fontSize: 12, marginTop: 2 }}>📝 {inv.notes}</div>}
                     <button onClick={() => { setInvoiceForm({ ...inv, job_title: 'Invoice', client_name: inv.clients?.profiles?.full_name || 'Client', editing: true }); setShowModal('invoice') }} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, marginTop: 6, fontFamily: 'inherit', textDecoration: 'underline' }}>✏️ Edit Invoice</button>
                   </div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' as const }}>
-                    <Badge label={inv.status} color={inv.status === 'paid' ? 'green' : inv.status === 'overdue' ? 'red' : 'yellow'} />
                     <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, color: C.navy, fontSize: 18 }}>${inv.amount}</span>
                     {inv.status === 'pending' && (
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -695,22 +810,38 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         )}
       </div>
 
-      {/* Assign Cleaner Modal */}
-      {showModal === 'assign' && selectedJob && (
-        <Modal title="Assign Cleaner" onClose={() => setShowModal('')}>
-          <div style={{ color: C.midGray, fontSize: 13, marginBottom: 16 }}>{selectedJob.title}</div>
+      {/* Quote Modal */}
+      {showModal === 'quote' && quoteForm && (
+        <Modal title="Generate Quote" onClose={() => { setShowModal(''); setQuoteForm(null) }}>
+          <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
+            <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, textTransform: 'uppercase' as const, marginBottom: 4 }}>For: {selectedConsultation?.name}</div>
+            <div style={{ color: C.midGray, fontSize: 12 }}>{selectedConsultation?.phone} · {selectedConsultation?.email}</div>
+          </div>
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Select Cleaner</label>
-            <select value={selectedCleaner} onChange={(e: any) => setSelectedCleaner(e.target.value)} style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '10px 14px', outline: 'none', boxSizing: 'border-box' as const, appearance: 'none' as const }}>
-              <option value="">Choose a cleaner...</option>
-              {cleaners.filter(c => c.status === 'active').map(c => (
-                <option key={c.id} value={c.id}>{c.profiles?.full_name}</option>
-              ))}
+            <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Link to Client Account</label>
+            <select value={quoteForm.client_id} onChange={(e: any) => setQuoteForm((f: any) => ({ ...f, client_id: e.target.value }))} style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '10px 14px', outline: 'none', boxSizing: 'border-box' as const, appearance: 'none' as const }}>
+              <option value="">No client account yet</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.profiles?.full_name}</option>)}
             </select>
           </div>
+          <Input label="Services" value={quoteForm.services} onChange={(e: any) => setQuoteForm((f: any) => ({ ...f, services: e.target.value }))} placeholder="e.g. Post-Construction Clean" />
+          <Textarea label="Description / Scope of Work" value={quoteForm.description} onChange={(e: any) => setQuoteForm((f: any) => ({ ...f, description: e.target.value }))} placeholder="Detail the work to be performed..." />
+          <Input label="Total Amount ($)" type="number" value={quoteForm.total_amount} onChange={(e: any) => setQuoteForm((f: any) => ({ ...f, total_amount: e.target.value }))} placeholder="0" />
+          {quoteForm.total_amount && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+              <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const }}>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.red }}>${(Number(quoteForm.total_amount) * 0.6).toFixed(2)}</div>
+                <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>60% Deposit Due Before Start</div>
+              </div>
+              <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const }}>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>${(Number(quoteForm.total_amount) * 0.4).toFixed(2)}</div>
+                <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>40% Balance On Completion</div>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-            <Btn onClick={assignCleaner} style={{ flex: 1 }}>Assign</Btn>
-            <Btn variant="outline" onClick={() => setShowModal('')} style={{ flex: 1 }}>Cancel</Btn>
+            <Btn onClick={saveQuote} style={{ flex: 1 }}>Save Quote</Btn>
+            <Btn variant="outline" onClick={() => { setShowModal(''); setQuoteForm(null) }} style={{ flex: 1 }}>Cancel</Btn>
           </div>
         </Modal>
       )}
@@ -726,6 +857,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
               </div>
               <div style={{ textAlign: 'right' as const }}>
                 <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 800, color: C.navy }}>INVOICE</div>
+                {invoiceForm.invoice_number && <div style={{ color: C.midGray, fontSize: 12 }}>{invoiceForm.invoice_number}</div>}
                 <div style={{ color: C.midGray, fontSize: 12 }}>{new Date().toLocaleDateString()}</div>
               </div>
             </div>
@@ -746,10 +878,39 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           </div>
           <Input label="Edit Amount ($)" type="number" value={invoiceForm.amount} onChange={(e: any) => setInvoiceForm((f: any) => ({ ...f, amount: e.target.value }))} />
           <Input label="Due Date" type="date" value={invoiceForm.due_date} onChange={(e: any) => setInvoiceForm((f: any) => ({ ...f, due_date: e.target.value }))} />
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Payment Method</label>
+            <select value={invoiceForm.payment_method || ''} onChange={(e: any) => setInvoiceForm((f: any) => ({ ...f, payment_method: e.target.value }))} style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '10px 14px', outline: 'none', boxSizing: 'border-box' as const, appearance: 'none' as const }}>
+              <option value="">Not specified</option>
+              <option value="square">Square</option>
+              <option value="zelle">Zelle</option>
+              <option value="cash">Cash</option>
+            </select>
+          </div>
           <Input label="Notes (optional)" value={invoiceForm.notes || ''} onChange={(e: any) => setInvoiceForm((f: any) => ({ ...f, notes: e.target.value }))} placeholder="Any additional notes..." />
           <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
             <Btn onClick={saveInvoice} style={{ flex: 1 }}>{invoiceForm.editing ? 'Save Changes' : 'Confirm & Save Invoice'}</Btn>
             <Btn variant="outline" onClick={() => { setShowModal(''); setInvoiceForm(null) }} style={{ flex: 1 }}>Cancel</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Assign Cleaner Modal */}
+      {showModal === 'assign' && selectedJob && (
+        <Modal title="Assign Cleaner" onClose={() => setShowModal('')}>
+          <div style={{ color: C.midGray, fontSize: 13, marginBottom: 16 }}>{selectedJob.title}</div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Select Cleaner</label>
+            <select value={selectedCleaner} onChange={(e: any) => setSelectedCleaner(e.target.value)} style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '10px 14px', outline: 'none', boxSizing: 'border-box' as const, appearance: 'none' as const }}>
+              <option value="">Choose a cleaner...</option>
+              {cleaners.filter(c => c.status === 'active').map(c => (
+                <option key={c.id} value={c.id}>{c.profiles?.full_name}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+            <Btn onClick={assignCleaner} style={{ flex: 1 }}>Assign</Btn>
+            <Btn variant="outline" onClick={() => setShowModal('')} style={{ flex: 1 }}>Cancel</Btn>
           </div>
         </Modal>
       )}
