@@ -719,7 +719,17 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Input label="Start Time" type="time" value={newJob.scheduled_time} onChange={(e: any) => setNewJob(f => ({ ...f, scheduled_time: e.target.value }))} />
-            <Input label="Number of Days" type="number" value={newJob.days} onChange={(e: any) => setNewJob(f => ({ ...f, days: e.target.value }))} placeholder="1" />
+            <Input label="Number of Days" type="number" value={newJob.days} <div style={{ marginBottom: 14 }}>
+  <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Recurring Schedule</label>
+  <select value={newJob.recurring} onChange={(e: any) => setNewJob(f => ({ ...f, recurring: e.target.value }))} style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '10px 14px', outline: 'none', boxSizing: 'border-box' as const, appearance: 'none' as const }}>
+    <option value="">None (One-time job)</option>
+    <option value="weekly">Weekly</option>
+    <option value="biweekly">Bi-Weekly</option>
+    <option value="monthly">Monthly</option>
+    <option value="twice_monthly">Twice a Month</option>
+    <option value="custom">Custom</option>
+  </select>
+</div>onChange={(e: any) => setNewJob(f => ({ ...f, days: e.target.value }))} placeholder="1" />
           </div>
           <Input label="Base Price ($)" type="number" value={newJob.price} onChange={(e: any) => setNewJob(f => ({ ...f, price: e.target.value }))} placeholder="0" />
           <Input label="Access / Clearance Notes" value={newJob.access_notes} onChange={(e: any) => setNewJob(f => ({ ...f, access_notes: e.target.value }))} placeholder="Gate code, key location, contact..." />
