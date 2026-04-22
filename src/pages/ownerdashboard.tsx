@@ -251,6 +251,51 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     doc.save(`PrecisionPost-Quote-${quote.clients?.profiles?.full_name || 'Client'}.pdf`)
   }
 
+  const downloadInvoicePDF = (inv: any) => {
+    const doc = new jsPDF()
+    doc.setFontSize(20)
+    doc.setTextColor(13, 33, 68)
+    doc.text('PRECISION POST CLEANING CO.', 20, 20)
+    doc.setFontSize(10)
+    doc.setTextColor(138, 149, 163)
+    doc.text('precisionpostcleaningco.com | Built Rough. Finished Right.', 20, 28)
+    doc.setFontSize(16)
+    doc.setTextColor(13, 33, 68)
+    doc.text('INVOICE', 170, 20)
+    doc.setFontSize(10)
+    doc.setTextColor(138, 149, 163)
+    doc.text(new Date().toLocaleDateString(), 170, 28)
+    if (inv.invoice_number) doc.text(inv.invoice_number, 170, 35)
+    doc.setDrawColor(214, 220, 230)
+    doc.line(20, 33, 190, 33)
+    doc.setFontSize(11)
+    doc.setTextColor(138, 149, 163)
+    doc.text('Bill To:', 20, 42)
+    doc.setFontSize(13)
+    doc.setTextColor(26, 37, 53)
+    doc.text(inv.clients?.profiles?.full_name || 'Client', 20, 50)
+    doc.line(20, 60, 190, 60)
+    autoTable(doc, {
+      startY: 66,
+      head: [['Description', 'Amount']],
+      body: [
+        [inv.job_title || 'Services Rendered', `$${Number(inv.amount).toLocaleString()}`],
+        ['TOTAL DUE', `$${Number(inv.amount).toLocaleString()}`],
+      ],
+      headStyles: { fillColor: [13, 33, 68], textColor: 255, fontStyle: 'bold' },
+      bodyStyles: { textColor: [26, 37, 53] },
+      alternateRowStyles: { fillColor: [244, 246, 249] },
+      columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+      styles: { fontSize: 11 },
+    })
+    doc.setFontSize(10)
+    doc.setTextColor(138, 149, 163)
+    doc.text(`Due Date: ${inv.due_date || 'Upon receipt'}`, 20, 160)
+    if (inv.notes) doc.text(`Notes: ${inv.notes}`, 20, 168)
+    doc.text('Thank you for choosing Precision Post Cleaning Co.', 20, 200)
+    doc.save(`PrecisionPost-Invoice-${inv.clients?.profiles?.full_name || 'Client'}.pdf`)
+  }
+
   const updateQuoteStatus = async (id: string, status: string) => {
     await supabase.from('quotes').update({ status }).eq('id', id)
     fetchAll()
