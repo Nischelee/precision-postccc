@@ -217,25 +217,30 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
       amount: job.price || 0,
       due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       notes: '',
+      editing: false,
     })
     setShowModal('invoice')
   }
 
-
   const saveInvoice = async () => {
     if (!invoiceForm) return
-    const { error } = await supabase.from('invoices').insert([{
-      job_id: invoiceForm.job_id,
-      client_id: invoiceForm.client_id || null,
-      amount: Number(invoiceForm.amount),
-      status: 'pending',
-      due_date: invoiceForm.due_date,
-      notes: invoiceForm.notes || '',
-    }])
-    if (error) {
-      console.log('Invoice save error:', error)
-      alert('Error saving invoice: ' + error.message)
-      return
+    if (invoiceForm.editing) {
+      const { error } = await supabase.from('invoices').update({
+        amount: Number(invoiceForm.amount),
+        due_date: invoiceForm.due_date,
+        notes: invoiceForm.notes || '',
+      }).eq('id', invoiceForm.id)
+      if (error) { alert('Error: ' + error.message); return }
+    } else {
+      const { error } = await supabase.from('invoices').insert([{
+        job_id: invoiceForm.job_id,
+        client_id: invoiceForm.client_id || null,
+        amount: Number(invoiceForm.amount),
+        status: 'pending',
+        due_date: invoiceForm.due_date,
+        notes: invoiceForm.notes || '',
+      }])
+      if (error) { alert('Error: ' + error.message); return }
     }
     setShowModal('')
     setInvoiceForm(null)
@@ -515,22 +520,25 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
               </div>
             </div>
             {invoices.map(inv => (
-              <div key={inv.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 10 }}>
-                <div>
-                  <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{inv.clients?.profiles?.full_name || 'Client'}</div>
-                  <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>Due: {inv.due_date} · {inv.payment_method || 'Unpaid'}</div>
-                </div>
-                <button onClick={() => { setInvoiceForm({ ...inv, job_title: 'Invoice', client_name: inv.clients?.profiles?.full_name || 'Client', editing: true }); setShowModal('invoice') }} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, marginTop: 4, fontFamily: 'inherit', textDecoration: 'underline' }}>Edit Invoice</button>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <Badge label={inv.status} color={inv.status === 'paid' ? 'green' : inv.status === 'overdue' ? 'red' : 'yellow'} />
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, color: C.navy, fontSize: 18 }}>${inv.amount}</span>
-                  {inv.status === 'pending' && (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <Btn onClick={() => markInvoicePaid(inv.id, 'square')} style={{ padding: '6px 12px', fontSize: 11 }}>Square</Btn>
-                      <Btn onClick={() => markInvoicePaid(inv.id, 'zelle')} variant="outline" style={{ padding: '6px 12px', fontSize: 11 }}>Zelle</Btn>
-                      <Btn onClick={() => markInvoicePaid(inv.id, 'cash')} variant="outline" style={{ padding: '6px 12px', fontSize: 11 }}>Cash</Btn>
-                    </div>
-                  )}
+              <div key={inv.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10 }}>
+                  <div>
+                    <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{inv.clients?.profiles?.full_name || 'Client'}</div>
+                    <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>Due: {inv.due_date} · {inv.payment_method || 'Unpaid'}</div>
+                    {inv.notes && <div style={{ color: C.darkGray, fontSize: 12, marginTop: 2 }}>📝 {inv.notes}</div>}
+                    <button onClick={() => { setInvoiceForm({ ...inv, job_title: 'Invoice', client_name: inv.clients?.profiles?.full_name || 'Client', editing: true }); setShowModal('invoice') }} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, marginTop: 6, fontFamily: 'inherit', textDecoration: 'underline' }}>✏️ Edit Invoice</button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' as const }}>
+                    <Badge label={inv.status} color={inv.status === 'paid' ? 'green' : inv.status === 'overdue' ? 'red' : 'yellow'} />
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, color: C.navy, fontSize: 18 }}>${inv.amount}</span>
+                    {inv.status === 'pending' && (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <Btn onClick={() => markInvoicePaid(inv.id, 'square')} style={{ padding: '6px 12px', fontSize: 11 }}>Square</Btn>
+                        <Btn onClick={() => markInvoicePaid(inv.id, 'zelle')} variant="outline" style={{ padding: '6px 12px', fontSize: 11 }}>Zelle</Btn>
+                        <Btn onClick={() => markInvoicePaid(inv.id, 'cash')} variant="outline" style={{ padding: '6px 12px', fontSize: 11 }}>Cash</Btn>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -707,9 +715,9 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         </Modal>
       )}
 
-      {/* Invoice Preview Modal */}
+      {/* Invoice Modal */}
       {showModal === 'invoice' && invoiceForm && (
-        <Modal title="Invoice Preview" onClose={() => { setShowModal(''); setInvoiceForm(null) }}>
+        <Modal title={invoiceForm.editing ? 'Edit Invoice' : 'Invoice Preview'} onClose={() => { setShowModal(''); setInvoiceForm(null) }}>
           <div style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
               <div>
@@ -738,9 +746,9 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           </div>
           <Input label="Edit Amount ($)" type="number" value={invoiceForm.amount} onChange={(e: any) => setInvoiceForm((f: any) => ({ ...f, amount: e.target.value }))} />
           <Input label="Due Date" type="date" value={invoiceForm.due_date} onChange={(e: any) => setInvoiceForm((f: any) => ({ ...f, due_date: e.target.value }))} />
-          <Input label="Notes (optional)" value={invoiceForm.notes} onChange={(e: any) => setInvoiceForm((f: any) => ({ ...f, notes: e.target.value }))} placeholder="Any additional notes..." />
+          <Input label="Notes (optional)" value={invoiceForm.notes || ''} onChange={(e: any) => setInvoiceForm((f: any) => ({ ...f, notes: e.target.value }))} placeholder="Any additional notes..." />
           <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-            <Btn onClick={saveInvoice} style={{ flex: 1 }}>Confirm & Save Invoice</Btn>
+            <Btn onClick={saveInvoice} style={{ flex: 1 }}>{invoiceForm.editing ? 'Save Changes' : 'Confirm & Save Invoice'}</Btn>
             <Btn variant="outline" onClick={() => { setShowModal(''); setInvoiceForm(null) }} style={{ flex: 1 }}>Cancel</Btn>
           </div>
         </Modal>
