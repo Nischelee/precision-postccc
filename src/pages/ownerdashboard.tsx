@@ -520,6 +520,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                   <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{inv.clients?.profiles?.full_name || 'Client'}</div>
                   <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>Due: {inv.due_date} · {inv.payment_method || 'Unpaid'}</div>
                 </div>
+                <button onClick={() => { setInvoiceForm({ ...inv, job_title: 'Invoice', client_name: inv.clients?.profiles?.full_name || 'Client', editing: true }); setShowModal('invoice') }} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, marginTop: 4, fontFamily: 'inherit', textDecoration: 'underline' }}>Edit Invoice</button>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <Badge label={inv.status} color={inv.status === 'paid' ? 'green' : inv.status === 'overdue' ? 'red' : 'yellow'} />
                   <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, color: C.navy, fontSize: 18 }}>${inv.amount}</span>
