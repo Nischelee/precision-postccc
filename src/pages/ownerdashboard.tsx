@@ -34,6 +34,7 @@ const Badge = ({ label, color = 'navy' }: { label: string, color?: string }) => 
     green: { bg: 'rgba(16,150,72,0.10)', text: '#109648' },
     yellow: { bg: 'rgba(200,140,16,0.10)', text: '#C88C10' },
     gray: { bg: C.lightGray, text: C.darkGray },
+    orange: { bg: 'rgba(200,100,16,0.10)', text: '#C86410' },
   }
   const s = colors[color] || colors.navy
   return (
@@ -45,7 +46,7 @@ const Badge = ({ label, color = 'navy' }: { label: string, color?: string }) => 
 
 const Modal = ({ title, onClose, children }: any) => (
   <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-    <div style={{ background: C.white, borderRadius: 14, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' as const, padding: 28, boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}>
+    <div style={{ background: C.white, borderRadius: 14, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' as const, padding: 28, boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
         <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{title}</span>
         <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.midGray, cursor: 'pointer', fontSize: 24 }}>×</button>
@@ -80,18 +81,27 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   const [cleaners, setCleaners] = useState<any[]>([])
   const [invoices, setInvoices] = useState<any[]>([])
   const [services, setServices] = useState<any[]>([])
+  const [addons, setAddons] = useState<any[]>([])
   const [jobCleaners, setJobCleaners] = useState<any[]>([])
   const [showModal, setShowModal] = useState('')
   const [selectedJob, setSelectedJob] = useState<any>(null)
   const [selectedCleaner, setSelectedCleaner] = useState('')
-  const [newService, setNewService] = useState({ name: '', description: '', base_price: '' })
-  const [newJob, setNewJob] = useState({ title: '', type: 'Post-Construction', address: '', scheduled_date: '', scheduled_time: '', price: '', access_notes: '', client_id: '' })
   const [confirmAction, setConfirmAction] = useState<any>(null)
+  const [calcJobCost, setCalcJobCost] = useState('')
+  const [calcWorkers, setCalcWorkers] = useState('')
+  const [newService, setNewService] = useState({ name: '', description: '', base_price: '' })
+  const [newAddon, setNewAddon] = useState({ name: '', price: '' })
+  const [newJob, setNewJob] = useState({
+    title: '', type: 'Post-Construction', address: '',
+    scheduled_date: '', scheduled_time: '', price: '',
+    access_notes: '', client_id: '', days: '', end_date: '',
+    status: 'scheduled', selected_addons: [] as string[]
+  })
 
   useEffect(() => { fetchAll() }, [])
 
   const fetchAll = async () => {
-    const [c, j, cl, cn, i, s, jc] = await Promise.all([
+    const [c, j, cl, cn, i, s, jc, ao] = await Promise.all([
       supabase.from('consultations').select('*').order('created_at', { ascending: false }),
       supabase.from('jobs').select('*').order('scheduled_date', { ascending: true }),
       supabase.from('clients').select('*, profiles(full_name, email, phone)').order('created_at', { ascending: false }),
@@ -99,13 +109,15 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
       supabase.from('invoices').select('*, clients(profiles(full_name))').order('created_at', { ascending: false }),
       supabase.from('services').select('*').order('created_at', { ascending: false }),
       supabase.from('job_cleaners').select('*, cleaners(*, profiles(full_name))'),
+      supabase.from('services').select('*').eq('is_addon', true).order('created_at', { ascending: false }),
     ])
     setConsultations(c.data || [])
     setJobs(j.data || [])
     setClients(cl.data || [])
     setCleaners(cn.data || [])
     setInvoices(i.data || [])
-    setServices(s.data || [])
+    setServices((s.data || []).filter((x: any) => !x.is_addon))
+    setAddons(ao.data || [])
     setJobCleaners(jc.data || [])
   }
 
@@ -156,16 +168,39 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
 
   const addService = async () => {
     if (!newService.name) return
-    await supabase.from('services').insert([{ ...newService, base_price: Number(newService.base_price) }])
+    await supabase.from('services').insert([{ ...newService, base_price: Number(newService.base_price), is_addon: false }])
     setNewService({ name: '', description: '', base_price: '' })
+    setShowModal('')
+    fetchAll()
+  }
+
+  const addAddon = async () => {
+    if (!newAddon.name) return
+    await supabase.from('services').insert([{ name: newAddon.name, base_price: Number(newAddon.price), is_addon: true, description: 'Add-on service' }])
+    setNewAddon({ name: '', price: '' })
     setShowModal('')
     fetchAll()
   }
 
   const addJob = async () => {
     if (!newJob.title || !newJob.scheduled_date) return
-    await supabase.from('jobs').insert([{ ...newJob, price: Number(newJob.price), status: 'scheduled' }])
-    setNewJob({ title: '', type: 'Post-Construction', address: '', scheduled_date: '', scheduled_time: '', price: '', access_notes: '', client_id: '' })
+    const addonCost = newJob.selected_addons.reduce((sum, id) => {
+      const addon = addons.find((a: any) => a.id === id)
+      return sum + (addon?.base_price || 0)
+    }, 0)
+    await supabase.from('jobs').insert([{
+      title: newJob.title,
+      type: newJob.type,
+      address: newJob.address,
+      scheduled_date: newJob.scheduled_date,
+      scheduled_time: newJob.scheduled_time,
+      price: Number(newJob.price) + addonCost,
+      access_notes: newJob.access_notes,
+      client_id: newJob.client_id || null,
+      status: 'scheduled',
+      notes: newJob.selected_addons.length > 0 ? `Add-ons: ${newJob.selected_addons.map(id => addons.find((a: any) => a.id === id)?.name).join(', ')}` : '',
+    }])
+    setNewJob({ title: '', type: 'Post-Construction', address: '', scheduled_date: '', scheduled_time: '', price: '', access_notes: '', client_id: '', days: '', end_date: '', status: 'scheduled', selected_addons: [] })
     setShowModal('')
     fetchAll()
   }
@@ -188,18 +223,22 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
 
   const signOut = async () => { await supabase.auth.signOut() }
 
+  const getJobCleaners = (jobId: string) => jobCleaners.filter(jc => jc.job_id === jobId)
+
+  const calcHours = (clockIn: string, clockOut: string) => {
+    if (!clockIn || !clockOut) return 0
+    const diff = (new Date(clockOut).getTime() - new Date(clockIn).getTime()) / (1000 * 60 * 60)
+    return Math.round(diff * 10) / 10
+  }
+
   const newConsultations = consultations.filter(c => c.status === 'new').length
   const pendingInvoices = invoices.filter(i => i.status === 'pending')
   const totalOutstanding = pendingInvoices.reduce((a, b) => a + (b.amount || 0), 0)
   const todayJobs = jobs.filter(j => j.scheduled_date === new Date().toISOString().split('T')[0])
 
-  const getJobCleaners = (jobId: string) => jobCleaners.filter(jc => jc.job_id === jobId)
-
-  const getCleanerPay = (job: any) => {
-    const assigned = getJobCleaners(job.id)
-    if (assigned.length === 0) return 0
-    return ((job.price * 0.4) / assigned.length).toFixed(2)
-  }
+  const calcResult = calcJobCost && calcWorkers
+    ? { total: Number(calcJobCost), workerPool: (Number(calcJobCost) * 0.4), perWorker: (Number(calcJobCost) * 0.4) / Number(calcWorkers), business: Number(calcJobCost) * 0.6 }
+    : null
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.offWhite, fontFamily: "'Barlow', sans-serif" }}>
@@ -261,8 +300,8 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                     <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>{job.title}</div>
                     <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{job.scheduled_date} · {job.address}</div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
-                    <Badge label={job.status} color={job.status === 'in_progress' ? 'yellow' : job.status === 'completed' ? 'green' : 'navy'} />
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <Badge label={job.status} color={job.status === 'in_progress' ? 'yellow' : job.status === 'completed' ? 'green' : job.status === 'on_hold' ? 'orange' : 'navy'} />
                     <span style={{ color: C.navy, fontWeight: 800, fontSize: 14 }}>${job.price}</span>
                   </div>
                 </div>
@@ -281,18 +320,14 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10, marginBottom: 10 }}>
                   <div>
                     <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{c.name}</div>
-                    <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{c.email} · {c.phone}</div>
-                    <div style={{ color: C.midGray, fontSize: 12 }}>{c.address}</div>
+                    <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>📞 {c.phone} · ✉️ {c.email}</div>
+                    <div style={{ color: C.midGray, fontSize: 12 }}>📍 {c.address}</div>
                   </div>
                   <Badge label={c.status} color={c.status === 'new' ? 'red' : c.status === 'converted' ? 'green' : 'gray'} />
                 </div>
                 <div style={{ background: C.offWhite, borderRadius: 7, padding: '10px 12px', marginBottom: 12 }}>
                   <div style={{ color: C.navy, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>{c.service_type}</div>
                   <div style={{ color: C.darkGray, fontSize: 13 }}>{c.message}</div>
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginBottom: 10 }}>
-                  <a href={`tel:${c.phone}`} style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: C.navy, textDecoration: 'none' }}>📞 Call</a>
-                  <a href={`mailto:${c.email}`} style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: C.navy, textDecoration: 'none' }}>✉️ Email</a>
                 </div>
                 {c.status === 'new' && (
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
@@ -314,26 +349,32 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
             </div>
             {jobs.map((job) => {
               const assigned = getJobCleaners(job.id)
-              const payPerCleaner = getCleanerPay(job)
+              const workerPool = job.price * 0.4
+              const perWorker = assigned.length > 0 ? (workerPool / assigned.length).toFixed(2) : '0.00'
               return (
                 <div key={job.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10, marginBottom: 12 }}>
                     <div>
                       <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{job.title}</div>
-                      <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{job.scheduled_date} {job.scheduled_time && `· ${job.scheduled_time}`} · {job.address}</div>
+                      <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>
+                        📅 {job.scheduled_date} {job.scheduled_time && `· ${job.scheduled_time}`}
+                        {job.end_date && ` → ${job.end_date}`}
+                        {job.days && ` · ${job.days} day(s)`}
+                      </div>
+                      <div style={{ color: C.midGray, fontSize: 12 }}>📍 {job.address}</div>
                       {job.access_notes && <div style={{ color: C.red, fontSize: 12, marginTop: 2 }}>🔑 {job.access_notes}</div>}
+                      {job.notes && <div style={{ color: C.darkGray, fontSize: 12, marginTop: 2 }}>📝 {job.notes}</div>}
                     </div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
                       <Badge label={job.type} color="navy" />
-                      <Badge label={job.status} color={job.status === 'in_progress' ? 'yellow' : job.status === 'completed' ? 'green' : 'navy'} />
+                      <Badge label={job.status} color={job.status === 'in_progress' ? 'yellow' : job.status === 'completed' ? 'green' : job.status === 'on_hold' ? 'orange' : 'navy'} />
                       <span style={{ color: C.navy, fontWeight: 800, fontSize: 15 }}>${job.price}</span>
                     </div>
                   </div>
 
-                  {/* Assigned Cleaners */}
                   <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', marginBottom: 10 }}>
                     <div style={{ color: C.navy, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>
-                      Assigned Cleaners {assigned.length > 0 && `· $${payPerCleaner} each (40%)`}
+                      Assigned Cleaners · Worker Pool: ${workerPool.toFixed(2)} (40%) · ${perWorker} each
                     </div>
                     {assigned.length === 0 && <div style={{ color: C.midGray, fontSize: 12 }}>No cleaners assigned yet</div>}
                     {assigned.map(jc => (
@@ -347,7 +388,9 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
                     <Btn onClick={() => { setSelectedJob(job); setShowModal('assign') }} variant="outline" style={{ padding: '6px 14px', fontSize: 12 }}>+ Assign Cleaner</Btn>
                     {job.status === 'scheduled' && <Btn onClick={() => updateJobStatus(job.id, 'in_progress')} style={{ padding: '6px 14px', fontSize: 12 }}>Start Job</Btn>}
-                    {job.status === 'in_progress' && <Btn onClick={() => updateJobStatus(job.id, 'completed')} style={{ padding: '6px 14px', fontSize: 12 }}>Complete Job</Btn>}
+                    {job.status === 'in_progress' && <Btn onClick={() => updateJobStatus(job.id, 'completed')} style={{ padding: '6px 14px', fontSize: 12 }}>Complete</Btn>}
+                    {(job.status === 'scheduled' || job.status === 'in_progress') && <Btn onClick={() => updateJobStatus(job.id, 'on_hold')} variant="outline" style={{ padding: '6px 14px', fontSize: 12, borderColor: '#C86410', color: '#C86410' }}>On Hold</Btn>}
+                    {job.status === 'on_hold' && <Btn onClick={() => updateJobStatus(job.id, 'scheduled')} variant="outline" style={{ padding: '6px 14px', fontSize: 12 }}>Resume</Btn>}
                     {job.status === 'completed' && <Btn onClick={() => createInvoice(job)} variant="outline" style={{ padding: '6px 14px', fontSize: 12 }}>Generate Invoice</Btn>}
                   </div>
                 </div>
@@ -362,10 +405,18 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Clients</div>
             {clients.map(c => (
               <div key={c.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
-                <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{c.profiles?.full_name}</div>
-                <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{c.profiles?.email} · {c.profiles?.phone}</div>
-                <div style={{ color: C.midGray, fontSize: 12 }}>{c.address}, {c.city} {c.state}</div>
-                <div style={{ marginTop: 8 }}><Badge label={c.type || 'commercial'} color="navy" /></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10, marginBottom: 8 }}>
+                  <div>
+                    <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{c.profiles?.full_name}</div>
+                    <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>✉️ {c.profiles?.email}</div>
+                    <div style={{ color: C.midGray, fontSize: 12 }}>📞 {c.profiles?.phone}</div>
+                    <div style={{ color: C.midGray, fontSize: 12 }}>📍 {c.address}, {c.city} {c.state} {c.zip}</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6, alignItems: 'flex-end' }}>
+                    <Badge label={c.type || 'commercial'} color="navy" />
+                    <Badge label={c.client_category || 'company'} color="gray" />
+                  </div>
+                </div>
               </div>
             ))}
             {clients.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No clients yet.</div>}
@@ -378,6 +429,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
               {cleaners.map(c => {
                 const cleanerJobs = jobCleaners.filter(jc => jc.cleaner_id === c.id)
+                const totalHours = cleanerJobs.reduce((sum, jc) => sum + calcHours(jc.clock_in, jc.clock_out), 0)
                 return (
                   <div key={c.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -385,22 +437,26 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                       <Badge label={c.status || 'active'} color={c.status === 'active' ? 'green' : c.status === 'terminated' ? 'red' : 'yellow'} />
                     </div>
                     <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{c.profiles?.full_name}</div>
-                    <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{c.profiles?.phone}</div>
-                    <div style={{ color: C.midGray, fontSize: 12 }}>{c.profiles?.email}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, marginBottom: 14 }}>
-                      <div><div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 22, color: C.navy }}>{cleanerJobs.length}</div><div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Jobs</div></div>
-                      <div><div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 22, color: C.navy }}>⭐ {c.rating || 5.0}</div><div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Rating</div></div>
+                    <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>📞 {c.profiles?.phone}</div>
+                    <div style={{ color: C.midGray, fontSize: 12 }}>✉️ {c.profiles?.email}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 14, marginBottom: 14 }}>
+                      <div style={{ textAlign: 'center' as const }}>
+                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>{cleanerJobs.length}</div>
+                        <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>Jobs</div>
+                      </div>
+                      <div style={{ textAlign: 'center' as const }}>
+                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>{totalHours}h</div>
+                        <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>Hours</div>
+                      </div>
+                      <div style={{ textAlign: 'center' as const }}>
+                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>⭐{c.rating || 5.0}</div>
+                        <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>Rating</div>
+                      </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                      {c.status !== 'active' && (
-                        <Btn onClick={() => setConfirmAction({ type: 'activate', cleaner: c })} style={{ padding: '6px 14px', fontSize: 11 }}>Activate</Btn>
-                      )}
-                      {c.status === 'active' && (
-                        <Btn onClick={() => setConfirmAction({ type: 'deactivate', cleaner: c })} variant="outline" style={{ padding: '6px 14px', fontSize: 11 }}>Deactivate</Btn>
-                      )}
-                      {c.status !== 'terminated' && (
-                        <Btn onClick={() => setConfirmAction({ type: 'terminate', cleaner: c })} variant="outline" style={{ padding: '6px 14px', fontSize: 11, borderColor: C.red, color: C.red }}>Terminate</Btn>
-                      )}
+                      {c.status !== 'active' && <Btn onClick={() => setConfirmAction({ type: 'activate', cleaner: c })} style={{ padding: '6px 14px', fontSize: 11 }}>Activate</Btn>}
+                      {c.status === 'active' && <Btn onClick={() => setConfirmAction({ type: 'deactivate', cleaner: c })} variant="outline" style={{ padding: '6px 14px', fontSize: 11 }}>Deactivate</Btn>}
+                      {c.status !== 'terminated' && <Btn onClick={() => setConfirmAction({ type: 'terminate', cleaner: c })} variant="outline" style={{ padding: '6px 14px', fontSize: 11, borderColor: C.red, color: C.red }}>Terminate</Btn>}
                     </div>
                   </div>
                 )
@@ -427,7 +483,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
               <div key={inv.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 10 }}>
                 <div>
                   <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{inv.clients?.profiles?.full_name || 'Client'}</div>
-                  <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{inv.due_date} · {inv.payment_method || 'Pending payment'}</div>
+                  <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>Due: {inv.due_date} · {inv.payment_method || 'Unpaid'}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <Badge label={inv.status} color={inv.status === 'paid' ? 'green' : inv.status === 'overdue' ? 'red' : 'yellow'} />
@@ -449,53 +505,106 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         {tab === 'payroll' && (
           <div>
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Payroll</div>
+
+            {/* Calculator */}
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, marginBottom: 20, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
+              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Pay Calculator</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                <Input label="Job Total ($)" type="number" value={calcJobCost} onChange={(e: any) => setCalcJobCost(e.target.value)} placeholder="1000" />
+                <Input label="Number of Workers" type="number" value={calcWorkers} onChange={(e: any) => setCalcWorkers(e.target.value)} placeholder="2" />
+              </div>
+              {calcResult && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                  <div style={{ background: C.offWhite, borderRadius: 8, padding: '12px 14px', textAlign: 'center' as const }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy }}>${calcResult.workerPool.toFixed(2)}</div>
+                    <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>Worker Pool (40%)</div>
+                  </div>
+                  <div style={{ background: C.offWhite, borderRadius: 8, padding: '12px 14px', textAlign: 'center' as const }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.red }}>${calcResult.perWorker.toFixed(2)}</div>
+                    <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>Per Worker</div>
+                  </div>
+                  <div style={{ background: C.offWhite, borderRadius: 8, padding: '12px 14px', textAlign: 'center' as const }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: '#109648' }}>${calcResult.business.toFixed(2)}</div>
+                    <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>Business (60%)</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Cleaner Payroll */}
             {cleaners.map(cleaner => {
               const assigned = jobCleaners.filter(jc => jc.cleaner_id === cleaner.id)
-              const completedJobs = assigned.filter(jc => {
+              const completedAssigned = assigned.filter(jc => {
                 const job = jobs.find(j => j.id === jc.job_id)
                 return job?.status === 'completed'
               })
-              const totalOwed = completedJobs.reduce((sum, jc) => {
+              const totalHours = assigned.reduce((sum, jc) => sum + calcHours(jc.clock_in, jc.clock_out), 0)
+              const totalOwed = completedAssigned.reduce((sum, jc) => {
                 const job = jobs.find(j => j.id === jc.job_id)
                 if (!job) return sum
-                const assignedToJob = jobCleaners.filter(x => x.job_id === job.id).length
-                return sum + (job.price * 0.4) / assignedToJob
+                const assignedCount = jobCleaners.filter(x => x.job_id === job.id).length
+                return sum + (job.price * 0.4) / assignedCount
               }, 0)
               return (
                 <div key={cleaner.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10, marginBottom: 12 }}>
                     <div>
                       <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{cleaner.profiles?.full_name}</div>
-                      <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{completedJobs.length} completed jobs</div>
+                      <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{completedAssigned.length} completed jobs · {totalHours}h total</div>
                     </div>
                     <div style={{ textAlign: 'right' as const }}>
                       <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 800, color: C.navy }}>${totalOwed.toFixed(2)}</div>
-                      <div style={{ color: C.midGray, fontSize: 11, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Total Owed (40%)</div>
+                      <div style={{ color: C.midGray, fontSize: 11, textTransform: 'uppercase' as const }}>Total Owed</div>
                     </div>
                   </div>
+                  {completedAssigned.map(jc => {
+                    const job = jobs.find(j => j.id === jc.job_id)
+                    if (!job) return null
+                    const assignedCount = jobCleaners.filter(x => x.job_id === job.id).length
+                    const pay = (job.price * 0.4) / assignedCount
+                    const hours = calcHours(jc.clock_in, jc.clock_out)
+                    return (
+                      <div key={jc.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: `1px solid ${C.lightGray}`, fontSize: 13 }}>
+                        <span style={{ color: C.text }}>{job.title}</span>
+                        <span style={{ color: C.midGray }}>{hours}h · <strong style={{ color: C.navy }}>${pay.toFixed(2)}</strong></span>
+                      </div>
+                    )
+                  })}
                 </div>
               )
             })}
-            {cleaners.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No cleaners yet.</div>}
           </div>
         )}
 
         {tab === 'services' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' as const, gap: 12 }}>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const }}>Services Menu</div>
-              <Btn onClick={() => setShowModal('service')}>+ Add Service</Btn>
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const }}>Services</div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <Btn onClick={() => setShowModal('service')} style={{ fontSize: 12, padding: '8px 16px' }}>+ Add Service</Btn>
+                <Btn onClick={() => setShowModal('addon')} variant="outline" style={{ fontSize: 12, padding: '8px 16px' }}>+ Add Add-On</Btn>
+              </div>
             </div>
+
+            <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 10 }}>Main Services</div>
             {services.map(s => (
-              <div key={s.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 10 }}>
+              <div key={s.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 20px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 10 }}>
                 <div>
-                  <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{s.name}</div>
-                  <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{s.description}</div>
+                  <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{s.name}</div>
+                  <div style={{ color: C.midGray, fontSize: 12 }}>{s.description}</div>
                 </div>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, color: C.navy, fontSize: 20 }}>Starting at ${s.base_price}</div>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, color: C.navy, fontSize: 18 }}>From ${s.base_price}</span>
               </div>
             ))}
-            {services.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No services yet.</div>}
+
+            <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginTop: 24, marginBottom: 10 }}>Add-Ons Menu</div>
+            {addons.map(a => (
+              <div key={a.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 20px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 10 }}>
+                <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>{a.name}</div>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, color: C.red, fontSize: 18 }}>+${a.base_price}</span>
+              </div>
+            ))}
+            {addons.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No add-ons yet.</div>}
           </div>
         )}
 
@@ -504,17 +613,18 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Messages</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
               {[...cleaners, ...clients].map(person => (
-                <div key={person.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', cursor: 'pointer', boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div key={person.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                     <div style={{ width: 40, height: 40, borderRadius: '50%', background: C.navy, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.white, fontWeight: 800, fontSize: 16 }}>{person.profiles?.full_name?.[0] || '?'}</div>
                     <div>
                       <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>{person.profiles?.full_name}</div>
-                      <div style={{ color: C.midGray, fontSize: 11 }}>{person.profiles?.email}</div>
+                      <div style={{ color: C.midGray, fontSize: 11 }}>{person.profiles?.phone}</div>
                     </div>
                   </div>
-                  <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
                     <a href={`tel:${person.profiles?.phone}`} style={{ flex: 1, textAlign: 'center' as const, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px', fontSize: 12, fontWeight: 600, color: C.navy, textDecoration: 'none' }}>📞 Call</a>
                     <a href={`mailto:${person.profiles?.email}`} style={{ flex: 1, textAlign: 'center' as const, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px', fontSize: 12, fontWeight: 600, color: C.navy, textDecoration: 'none' }}>✉️ Email</a>
+                    <a href={`sms:${person.profiles?.phone}`} style={{ flex: 1, textAlign: 'center' as const, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px', fontSize: 12, fontWeight: 600, color: C.navy, textDecoration: 'none' }}>💬 Text</a>
                   </div>
                 </div>
               ))}
@@ -526,7 +636,8 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
 
       {/* Assign Cleaner Modal */}
       {showModal === 'assign' && selectedJob && (
-        <Modal title={`Assign Cleaner — ${selectedJob.title}`} onClose={() => setShowModal('')}>
+        <Modal title={`Assign Cleaner`} onClose={() => setShowModal('')}>
+          <div style={{ color: C.midGray, fontSize: 13, marginBottom: 16 }}>{selectedJob.title}</div>
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Select Cleaner</label>
             <select value={selectedCleaner} onChange={(e: any) => setSelectedCleaner(e.target.value)} style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '10px 14px', outline: 'none', boxSizing: 'border-box' as const, appearance: 'none' as const }}>
@@ -548,21 +659,15 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         <Modal title="Confirm Action" onClose={() => setConfirmAction(null)}>
           <div style={{ color: C.text, fontSize: 15, marginBottom: 20 }}>
             {confirmAction.type === 'terminate'
-              ? `Are you sure you want to terminate ${confirmAction.cleaner.profiles?.full_name}? This action cannot be undone.`
+              ? `Are you sure you want to terminate ${confirmAction.cleaner.profiles?.full_name}?`
               : confirmAction.type === 'deactivate'
-              ? `Deactivate ${confirmAction.cleaner.profiles?.full_name}? They won't be assignable to new jobs.`
-              : `Reactivate ${confirmAction.cleaner.profiles?.full_name}?`
-            }
+              ? `Deactivate ${confirmAction.cleaner.profiles?.full_name}?`
+              : `Reactivate ${confirmAction.cleaner.profiles?.full_name}?`}
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <Btn
-              onClick={() => updateCleanerStatus(confirmAction.cleaner.id,
-                confirmAction.type === 'activate' ? 'active' :
-                confirmAction.type === 'deactivate' ? 'on_leave' : 'terminated'
-              )}
-              style={{ flex: 1, background: confirmAction.type === 'terminate' ? C.red : C.navy, borderColor: confirmAction.type === 'terminate' ? C.red : C.navy }}
-            >
-              {confirmAction.type === 'activate' ? 'Yes, Activate' : confirmAction.type === 'deactivate' ? 'Yes, Deactivate' : 'Yes, Terminate'}
+            <Btn onClick={() => updateCleanerStatus(confirmAction.cleaner.id, confirmAction.type === 'activate' ? 'active' : confirmAction.type === 'deactivate' ? 'on_leave' : 'terminated')}
+              style={{ flex: 1, background: confirmAction.type === 'terminate' ? C.red : C.navy, borderColor: confirmAction.type === 'terminate' ? C.red : C.navy }}>
+              Confirm
             </Btn>
             <Btn variant="outline" onClick={() => setConfirmAction(null)} style={{ flex: 1 }}>Cancel</Btn>
           </div>
@@ -582,7 +687,19 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         </Modal>
       )}
 
-      {/* Add Job Modal */}
+      {/* Add Addon Modal */}
+      {showModal === 'addon' && (
+        <Modal title="Add Add-On" onClose={() => setShowModal('')}>
+          <Input label="Add-On Name" value={newAddon.name} onChange={(e: any) => setNewAddon(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Window Cleaning, Carpet Steam" />
+          <Input label="Price ($)" type="number" value={newAddon.price} onChange={(e: any) => setNewAddon(f => ({ ...f, price: e.target.value }))} placeholder="0" />
+          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+            <Btn onClick={addAddon} style={{ flex: 1 }}>Save Add-On</Btn>
+            <Btn variant="outline" onClick={() => setShowModal('')} style={{ flex: 1 }}>Cancel</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* New Job Modal */}
       {showModal === 'job' && (
         <Modal title="New Job" onClose={() => setShowModal('')}>
           <Input label="Job Title" value={newJob.title} onChange={(e: any) => setNewJob(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Riverside Construction Final Clean" />
@@ -596,10 +713,28 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
             </select>
           </div>
           <Input label="Address" value={newJob.address} onChange={(e: any) => setNewJob(f => ({ ...f, address: e.target.value }))} placeholder="Job site address" />
-          <Input label="Date" type="date" value={newJob.scheduled_date} onChange={(e: any) => setNewJob(f => ({ ...f, scheduled_date: e.target.value }))} />
-          <Input label="Time" type="time" value={newJob.scheduled_time} onChange={(e: any) => setNewJob(f => ({ ...f, scheduled_time: e.target.value }))} />
-          <Input label="Price ($)" type="number" value={newJob.price} onChange={(e: any) => setNewJob(f => ({ ...f, price: e.target.value }))} placeholder="0" />
-          <Input label="Access / Clearance Notes" value={newJob.access_notes} onChange={(e: any) => setNewJob(f => ({ ...f, access_notes: e.target.value }))} placeholder="Gate code, key location, contact person..." />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Input label="Start Date" type="date" value={newJob.scheduled_date} onChange={(e: any) => setNewJob(f => ({ ...f, scheduled_date: e.target.value }))} />
+            <Input label="End Date" type="date" value={newJob.end_date} onChange={(e: any) => setNewJob(f => ({ ...f, end_date: e.target.value }))} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Input label="Start Time" type="time" value={newJob.scheduled_time} onChange={(e: any) => setNewJob(f => ({ ...f, scheduled_time: e.target.value }))} />
+            <Input label="Number of Days" type="number" value={newJob.days} onChange={(e: any) => setNewJob(f => ({ ...f, days: e.target.value }))} placeholder="1" />
+          </div>
+          <Input label="Base Price ($)" type="number" value={newJob.price} onChange={(e: any) => setNewJob(f => ({ ...f, price: e.target.value }))} placeholder="0" />
+          <Input label="Access / Clearance Notes" value={newJob.access_notes} onChange={(e: any) => setNewJob(f => ({ ...f, access_notes: e.target.value }))} placeholder="Gate code, key location, contact..." />
+          {addons.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8 }}>Add-Ons</label>
+              {addons.map((a: any) => (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <input type="checkbox" id={a.id} checked={newJob.selected_addons.includes(a.id)}
+                    onChange={(e) => setNewJob(f => ({ ...f, selected_addons: e.target.checked ? [...f.selected_addons, a.id] : f.selected_addons.filter(x => x !== a.id) }))} />
+                  <label htmlFor={a.id} style={{ color: C.text, fontSize: 13, cursor: 'pointer' }}>{a.name} <span style={{ color: C.red, fontWeight: 700 }}>+${a.base_price}</span></label>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
             <Btn onClick={addJob} style={{ flex: 1 }}>Create Job</Btn>
             <Btn variant="outline" onClick={() => setShowModal('')} style={{ flex: 1 }}>Cancel</Btn>
