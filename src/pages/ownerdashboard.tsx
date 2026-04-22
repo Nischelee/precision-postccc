@@ -212,26 +212,31 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     setInvoiceForm({
       job_id: job.id,
       job_title: job.title,
-      client_name: client?.profiles?.full_name || '',
-      client_id: job.client_id || '',
-      amount: job.price,
+      client_name: client?.profiles?.full_name || 'No client assigned',
+      client_id: job.client_id || null,
+      amount: job.price || 0,
       due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       notes: '',
-      payment_method: '',
     })
     setShowModal('invoice')
   }
 
+
   const saveInvoice = async () => {
     if (!invoiceForm) return
-    await supabase.from('invoices').insert([{
+    const { error } = await supabase.from('invoices').insert([{
       job_id: invoiceForm.job_id,
       client_id: invoiceForm.client_id || null,
       amount: Number(invoiceForm.amount),
       status: 'pending',
       due_date: invoiceForm.due_date,
-      notes: invoiceForm.notes,
+      notes: invoiceForm.notes || '',
     }])
+    if (error) {
+      console.log('Invoice save error:', error)
+      alert('Error saving invoice: ' + error.message)
+      return
+    }
     setShowModal('')
     setInvoiceForm(null)
     fetchAll()
