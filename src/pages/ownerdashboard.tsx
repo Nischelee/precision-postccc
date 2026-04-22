@@ -22,6 +22,7 @@ const NAV = [
   { id: 'clients', label: 'Clients', icon: '👤' },
   { id: 'cleaners', label: 'Cleaners', icon: '👥' },
   { id: 'invoices', label: 'Invoices', icon: '💰' },
+  { id: 'payroll', label: 'Payroll', icon: '💵' },
   { id: 'messages', label: 'Messages', icon: '💬' },
   { id: 'services', label: 'Services', icon: '⚙️' },
 ]
@@ -79,20 +80,25 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   const [cleaners, setCleaners] = useState<any[]>([])
   const [invoices, setInvoices] = useState<any[]>([])
   const [services, setServices] = useState<any[]>([])
+  const [jobCleaners, setJobCleaners] = useState<any[]>([])
   const [showModal, setShowModal] = useState('')
+  const [selectedJob, setSelectedJob] = useState<any>(null)
+  const [selectedCleaner, setSelectedCleaner] = useState('')
   const [newService, setNewService] = useState({ name: '', description: '', base_price: '' })
   const [newJob, setNewJob] = useState({ title: '', type: 'Post-Construction', address: '', scheduled_date: '', scheduled_time: '', price: '', access_notes: '', client_id: '' })
+  const [confirmAction, setConfirmAction] = useState<any>(null)
 
   useEffect(() => { fetchAll() }, [])
 
   const fetchAll = async () => {
-    const [c, j, cl, cn, i, s] = await Promise.all([
+    const [c, j, cl, cn, i, s, jc] = await Promise.all([
       supabase.from('consultations').select('*').order('created_at', { ascending: false }),
       supabase.from('jobs').select('*').order('scheduled_date', { ascending: true }),
       supabase.from('clients').select('*, profiles(full_name, email, phone)').order('created_at', { ascending: false }),
       supabase.from('cleaners').select('*, profiles(full_name, email, phone)').order('created_at', { ascending: false }),
       supabase.from('invoices').select('*, clients(profiles(full_name))').order('created_at', { ascending: false }),
       supabase.from('services').select('*').order('created_at', { ascending: false }),
+      supabase.from('job_cleaners').select('*, cleaners(*, profiles(full_name))'),
     ])
     setConsultations(c.data || [])
     setJobs(j.data || [])
@@ -100,6 +106,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     setCleaners(cn.data || [])
     setInvoices(i.data || [])
     setServices(s.data || [])
+    setJobCleaners(jc.data || [])
   }
 
   const updateConsultation = async (id: string, status: string) => {
@@ -126,6 +133,27 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     fetchAll()
   }
 
+  const assignCleaner = async () => {
+    if (!selectedJob || !selectedCleaner) return
+    const existing = jobCleaners.find(jc => jc.job_id === selectedJob.id && jc.cleaner_id === selectedCleaner)
+    if (existing) { setShowModal(''); return }
+    await supabase.from('job_cleaners').insert([{ job_id: selectedJob.id, cleaner_id: selectedCleaner }])
+    setShowModal('')
+    setSelectedCleaner('')
+    fetchAll()
+  }
+
+  const removeCleanerFromJob = async (jobCleanerId: string) => {
+    await supabase.from('job_cleaners').delete().eq('id', jobCleanerId)
+    fetchAll()
+  }
+
+  const updateCleanerStatus = async (cleanerId: string, status: string) => {
+    await supabase.from('cleaners').update({ status }).eq('id', cleanerId)
+    setConfirmAction(null)
+    fetchAll()
+  }
+
   const addService = async () => {
     if (!newService.name) return
     await supabase.from('services').insert([{ ...newService, base_price: Number(newService.base_price) }])
@@ -142,6 +170,17 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     fetchAll()
   }
 
+  const createInvoice = async (job: any) => {
+    await supabase.from('invoices').insert([{
+      job_id: job.id,
+      amount: job.price,
+      status: 'pending',
+      due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    }])
+    fetchAll()
+    setTab('invoices')
+  }
+
   const markInvoicePaid = async (id: string, method: string) => {
     await supabase.from('invoices').update({ status: 'paid', payment_method: method, paid_at: new Date().toISOString() }).eq('id', id)
     fetchAll()
@@ -153,6 +192,14 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   const pendingInvoices = invoices.filter(i => i.status === 'pending')
   const totalOutstanding = pendingInvoices.reduce((a, b) => a + (b.amount || 0), 0)
   const todayJobs = jobs.filter(j => j.scheduled_date === new Date().toISOString().split('T')[0])
+
+  const getJobCleaners = (jobId: string) => jobCleaners.filter(jc => jc.job_id === jobId)
+
+  const getCleanerPay = (job: any) => {
+    const assigned = getJobCleaners(job.id)
+    if (assigned.length === 0) return 0
+    return ((job.price * 0.4) / assigned.length).toFixed(2)
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.offWhite, fontFamily: "'Barlow', sans-serif" }}>
@@ -196,7 +243,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
               {[
                 { label: "Today's Jobs", val: todayJobs.length, color: C.navy },
                 { label: 'Active Clients', val: clients.length, color: C.navy },
-                { label: 'Active Cleaners', val: cleaners.length, color: C.navy },
+                { label: 'Active Cleaners', val: cleaners.filter(c => c.status === 'active').length, color: C.navy },
                 { label: 'Outstanding', val: `$${totalOutstanding.toLocaleString()}`, color: C.red },
                 { label: 'New Requests', val: newConsultations, color: newConsultations > 0 ? C.red : C.navy },
               ].map(s => (
@@ -220,7 +267,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                   </div>
                 </div>
               ))}
-              {jobs.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No jobs yet. Book your first job!</div>}
+              {jobs.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No jobs yet.</div>}
             </div>
           </div>
         )}
@@ -243,6 +290,10 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                   <div style={{ color: C.navy, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>{c.service_type}</div>
                   <div style={{ color: C.darkGray, fontSize: 13 }}>{c.message}</div>
                 </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginBottom: 10 }}>
+                  <a href={`tel:${c.phone}`} style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: C.navy, textDecoration: 'none' }}>📞 Call</a>
+                  <a href={`mailto:${c.email}`} style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: C.navy, textDecoration: 'none' }}>✉️ Email</a>
+                </div>
                 {c.status === 'new' && (
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
                     <Btn onClick={() => updateConsultation(c.id, 'contacted')} style={{ padding: '7px 16px', fontSize: 12 }}>Mark Contacted</Btn>
@@ -261,24 +312,47 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const }}>Jobs</div>
               <Btn onClick={() => setShowModal('job')}>+ New Job</Btn>
             </div>
-            {jobs.map((job) => (
-              <div key={job.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 10 }}>
-                  <div>
-                    <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{job.title}</div>
-                    <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{job.scheduled_date} {job.scheduled_time && `· ${job.scheduled_time}`} · {job.address}</div>
-                    {job.access_notes && <div style={{ color: C.red, fontSize: 12, marginTop: 2 }}>🔑 {job.access_notes}</div>}
+            {jobs.map((job) => {
+              const assigned = getJobCleaners(job.id)
+              const payPerCleaner = getCleanerPay(job)
+              return (
+                <div key={job.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10, marginBottom: 12 }}>
+                    <div>
+                      <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{job.title}</div>
+                      <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{job.scheduled_date} {job.scheduled_time && `· ${job.scheduled_time}`} · {job.address}</div>
+                      {job.access_notes && <div style={{ color: C.red, fontSize: 12, marginTop: 2 }}>🔑 {job.access_notes}</div>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
+                      <Badge label={job.type} color="navy" />
+                      <Badge label={job.status} color={job.status === 'in_progress' ? 'yellow' : job.status === 'completed' ? 'green' : 'navy'} />
+                      <span style={{ color: C.navy, fontWeight: 800, fontSize: 15 }}>${job.price}</span>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
-                    <Badge label={job.type} color="navy" />
-                    <Badge label={job.status} color={job.status === 'in_progress' ? 'yellow' : job.status === 'completed' ? 'green' : 'navy'} />
-                    <span style={{ color: C.navy, fontWeight: 800, fontSize: 15 }}>${job.price}</span>
-                    {job.status === 'scheduled' && <Btn onClick={() => updateJobStatus(job.id, 'in_progress')} style={{ padding: '6px 14px', fontSize: 12 }}>Start</Btn>}
-                    {job.status === 'in_progress' && <Btn onClick={() => updateJobStatus(job.id, 'completed')} style={{ padding: '6px 14px', fontSize: 12 }}>Complete</Btn>}
+
+                  {/* Assigned Cleaners */}
+                  <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', marginBottom: 10 }}>
+                    <div style={{ color: C.navy, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Assigned Cleaners {assigned.length > 0 && `· $${payPerCleaner} each (40%)`}
+                    </div>
+                    {assigned.length === 0 && <div style={{ color: C.midGray, fontSize: 12 }}>No cleaners assigned yet</div>}
+                    {assigned.map(jc => (
+                      <div key={jc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>👷 {jc.cleaners?.profiles?.full_name}</span>
+                        <button onClick={() => removeCleanerFromJob(jc.id)} style={{ background: 'none', border: 'none', color: C.midGray, cursor: 'pointer', fontSize: 16 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                    <Btn onClick={() => { setSelectedJob(job); setShowModal('assign') }} variant="outline" style={{ padding: '6px 14px', fontSize: 12 }}>+ Assign Cleaner</Btn>
+                    {job.status === 'scheduled' && <Btn onClick={() => updateJobStatus(job.id, 'in_progress')} style={{ padding: '6px 14px', fontSize: 12 }}>Start Job</Btn>}
+                    {job.status === 'in_progress' && <Btn onClick={() => updateJobStatus(job.id, 'completed')} style={{ padding: '6px 14px', fontSize: 12 }}>Complete Job</Btn>}
+                    {job.status === 'completed' && <Btn onClick={() => createInvoice(job)} variant="outline" style={{ padding: '6px 14px', fontSize: 12 }}>Generate Invoice</Btn>}
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
             {jobs.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No jobs yet.</div>}
           </div>
         )}
@@ -301,21 +375,36 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         {tab === 'cleaners' && (
           <div>
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Cleaners</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
-              {cleaners.map(c => (
-                <div key={c.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.navy, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.white, fontWeight: 800, fontSize: 18 }}>{c.profiles?.full_name?.[0] || '?'}</div>
-                    <Badge label={c.status || 'active'} color={c.status === 'active' ? 'green' : 'yellow'} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+              {cleaners.map(c => {
+                const cleanerJobs = jobCleaners.filter(jc => jc.cleaner_id === c.id)
+                return (
+                  <div key={c.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.navy, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.white, fontWeight: 800, fontSize: 18 }}>{c.profiles?.full_name?.[0] || '?'}</div>
+                      <Badge label={c.status || 'active'} color={c.status === 'active' ? 'green' : c.status === 'terminated' ? 'red' : 'yellow'} />
+                    </div>
+                    <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{c.profiles?.full_name}</div>
+                    <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{c.profiles?.phone}</div>
+                    <div style={{ color: C.midGray, fontSize: 12 }}>{c.profiles?.email}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, marginBottom: 14 }}>
+                      <div><div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 22, color: C.navy }}>{cleanerJobs.length}</div><div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Jobs</div></div>
+                      <div><div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 22, color: C.navy }}>⭐ {c.rating || 5.0}</div><div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Rating</div></div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                      {c.status !== 'active' && (
+                        <Btn onClick={() => setConfirmAction({ type: 'activate', cleaner: c })} style={{ padding: '6px 14px', fontSize: 11 }}>Activate</Btn>
+                      )}
+                      {c.status === 'active' && (
+                        <Btn onClick={() => setConfirmAction({ type: 'deactivate', cleaner: c })} variant="outline" style={{ padding: '6px 14px', fontSize: 11 }}>Deactivate</Btn>
+                      )}
+                      {c.status !== 'terminated' && (
+                        <Btn onClick={() => setConfirmAction({ type: 'terminate', cleaner: c })} variant="outline" style={{ padding: '6px 14px', fontSize: 11, borderColor: C.red, color: C.red }}>Terminate</Btn>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{c.profiles?.full_name}</div>
-                  <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{c.profiles?.phone}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
-                    <div><div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 22, color: C.navy }}>{c.total_jobs || 0}</div><div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Jobs</div></div>
-                    <div><div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 22, color: C.navy }}>⭐ {c.rating || 5.0}</div><div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Rating</div></div>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             {cleaners.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No cleaners yet.</div>}
           </div>
@@ -357,6 +446,40 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           </div>
         )}
 
+        {tab === 'payroll' && (
+          <div>
+            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Payroll</div>
+            {cleaners.map(cleaner => {
+              const assigned = jobCleaners.filter(jc => jc.cleaner_id === cleaner.id)
+              const completedJobs = assigned.filter(jc => {
+                const job = jobs.find(j => j.id === jc.job_id)
+                return job?.status === 'completed'
+              })
+              const totalOwed = completedJobs.reduce((sum, jc) => {
+                const job = jobs.find(j => j.id === jc.job_id)
+                if (!job) return sum
+                const assignedToJob = jobCleaners.filter(x => x.job_id === job.id).length
+                return sum + (job.price * 0.4) / assignedToJob
+              }, 0)
+              return (
+                <div key={cleaner.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', marginBottom: 10, boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 10 }}>
+                    <div>
+                      <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{cleaner.profiles?.full_name}</div>
+                      <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>{completedJobs.length} completed jobs</div>
+                    </div>
+                    <div style={{ textAlign: 'right' as const }}>
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 800, color: C.navy }}>${totalOwed.toFixed(2)}</div>
+                      <div style={{ color: C.midGray, fontSize: 11, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Total Owed (40%)</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {cleaners.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No cleaners yet.</div>}
+          </div>
+        )}
+
         {tab === 'services' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' as const, gap: 12 }}>
@@ -372,19 +495,81 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                 <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, color: C.navy, fontSize: 20 }}>Starting at ${s.base_price}</div>
               </div>
             ))}
-            {services.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No services yet. Add your first service.</div>}
+            {services.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No services yet.</div>}
           </div>
         )}
 
         {tab === 'messages' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, flexDirection: 'column' as const, gap: 12 }}>
-            <div style={{ fontSize: 40 }}>💬</div>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const }}>Messages</div>
-            <div style={{ color: C.midGray, fontSize: 13 }}>Messaging coming in next update</div>
+          <div>
+            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Messages</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+              {[...cleaners, ...clients].map(person => (
+                <div key={person.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px', cursor: 'pointer', boxShadow: '0 2px 12px rgba(13,33,68,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: C.navy, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.white, fontWeight: 800, fontSize: 16 }}>{person.profiles?.full_name?.[0] || '?'}</div>
+                    <div>
+                      <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>{person.profiles?.full_name}</div>
+                      <div style={{ color: C.midGray, fontSize: 11 }}>{person.profiles?.email}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                    <a href={`tel:${person.profiles?.phone}`} style={{ flex: 1, textAlign: 'center' as const, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px', fontSize: 12, fontWeight: 600, color: C.navy, textDecoration: 'none' }}>📞 Call</a>
+                    <a href={`mailto:${person.profiles?.email}`} style={{ flex: 1, textAlign: 'center' as const, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px', fontSize: 12, fontWeight: 600, color: C.navy, textDecoration: 'none' }}>✉️ Email</a>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {cleaners.length === 0 && clients.length === 0 && <div style={{ color: C.midGray, fontSize: 13 }}>No contacts yet.</div>}
           </div>
         )}
       </div>
 
+      {/* Assign Cleaner Modal */}
+      {showModal === 'assign' && selectedJob && (
+        <Modal title={`Assign Cleaner — ${selectedJob.title}`} onClose={() => setShowModal('')}>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Select Cleaner</label>
+            <select value={selectedCleaner} onChange={(e: any) => setSelectedCleaner(e.target.value)} style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '10px 14px', outline: 'none', boxSizing: 'border-box' as const, appearance: 'none' as const }}>
+              <option value="">Choose a cleaner...</option>
+              {cleaners.filter(c => c.status === 'active').map(c => (
+                <option key={c.id} value={c.id}>{c.profiles?.full_name}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+            <Btn onClick={assignCleaner} style={{ flex: 1 }}>Assign</Btn>
+            <Btn variant="outline" onClick={() => setShowModal('')} style={{ flex: 1 }}>Cancel</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Confirm Action Modal */}
+      {confirmAction && (
+        <Modal title="Confirm Action" onClose={() => setConfirmAction(null)}>
+          <div style={{ color: C.text, fontSize: 15, marginBottom: 20 }}>
+            {confirmAction.type === 'terminate'
+              ? `Are you sure you want to terminate ${confirmAction.cleaner.profiles?.full_name}? This action cannot be undone.`
+              : confirmAction.type === 'deactivate'
+              ? `Deactivate ${confirmAction.cleaner.profiles?.full_name}? They won't be assignable to new jobs.`
+              : `Reactivate ${confirmAction.cleaner.profiles?.full_name}?`
+            }
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Btn
+              onClick={() => updateCleanerStatus(confirmAction.cleaner.id,
+                confirmAction.type === 'activate' ? 'active' :
+                confirmAction.type === 'deactivate' ? 'on_leave' : 'terminated'
+              )}
+              style={{ flex: 1, background: confirmAction.type === 'terminate' ? C.red : C.navy, borderColor: confirmAction.type === 'terminate' ? C.red : C.navy }}
+            >
+              {confirmAction.type === 'activate' ? 'Yes, Activate' : confirmAction.type === 'deactivate' ? 'Yes, Deactivate' : 'Yes, Terminate'}
+            </Btn>
+            <Btn variant="outline" onClick={() => setConfirmAction(null)} style={{ flex: 1 }}>Cancel</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Add Service Modal */}
       {showModal === 'service' && (
         <Modal title="Add Service" onClose={() => setShowModal('')}>
           <Input label="Service Name" value={newService.name} onChange={(e: any) => setNewService(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Post-Construction Clean" />
@@ -397,6 +582,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         </Modal>
       )}
 
+      {/* Add Job Modal */}
       {showModal === 'job' && (
         <Modal title="New Job" onClose={() => setShowModal('')}>
           <Input label="Job Title" value={newJob.title} onChange={(e: any) => setNewJob(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Riverside Construction Final Clean" />
