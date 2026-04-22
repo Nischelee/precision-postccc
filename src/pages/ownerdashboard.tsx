@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
 const supabase = createClient('https://cmxivkphfhxtxhaqevch.supabase.co', 'sb_publishable_G2WC5Z0MrSeqQHqy8PxU0Q_vFy49Lcv')
 
 const C = {
@@ -115,7 +117,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   const fetchAll = async () => {
     const [c, q, j, cl, cn, i, s, jc, ao] = await Promise.all([
       supabase.from('consultations').select('*').order('created_at', { ascending: false }),
-      supabase.from('quotes').select('*, clients(profiles(full_name))').order('created_at', { ascending: false }),
+      supabase.from('quotes').select('*, clients(profiles(full_name, email, phone))').order('created_at', { ascending: false }),
       supabase.from('jobs').select('*').order('scheduled_date', { ascending: true }),
       supabase.from('clients').select('*, profiles(full_name, email, phone)').order('created_at', { ascending: false }),
       supabase.from('cleaners').select('*, profiles(full_name, email, phone)').order('created_at', { ascending: false }),
@@ -162,7 +164,6 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
       services: consultation.service_type || '',
       description: consultation.message || '',
       total_amount: '',
-      status: 'draft',
     })
     setShowModal('quote')
   }
@@ -170,16 +171,14 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   const saveQuote = async () => {
     if (!quoteForm || !quoteForm.total_amount) return
     const total = Number(quoteForm.total_amount)
-    const deposit = total * 0.6
-    const balance = total * 0.4
     const { error } = await supabase.from('quotes').insert([{
       consultation_id: quoteForm.consultation_id,
       client_id: quoteForm.client_id || null,
       services: quoteForm.services,
       description: quoteForm.description,
       total_amount: total,
-      deposit_amount: deposit,
-      balance_amount: balance,
+      deposit_amount: total * 0.6,
+      balance_amount: total * 0.4,
       status: 'draft',
     }])
     if (error) { alert('Error: ' + error.message); return }
@@ -187,6 +186,69 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     setQuoteForm(null)
     fetchAll()
     setTab('quotes')
+  }
+
+  const downloadQuotePDF = (quote: any) => {
+    const doc = new jsPDF()
+    doc.setFontSize(20)
+    doc.setTextColor(13, 33, 68)
+    doc.text('PRECISION POST CLEANING CO.', 20, 20)
+    doc.setFontSize(10)
+    doc.setTextColor(138, 149, 163)
+    doc.text('precisionpostcleaningco.com | Built Rough. Finished Right.', 20, 28)
+    doc.setFontSize(16)
+    doc.setTextColor(13, 33, 68)
+    doc.text('QUOTE', 170, 20)
+    doc.setFontSize(10)
+    doc.setTextColor(138, 149, 163)
+    doc.text(new Date().toLocaleDateString(), 170, 28)
+    doc.setDrawColor(214, 220, 230)
+    doc.line(20, 33, 190, 33)
+    doc.setFontSize(11)
+    doc.setTextColor(138, 149, 163)
+    doc.text('Prepared for:', 20, 42)
+    doc.setFontSize(13)
+    doc.setTextColor(26, 37, 53)
+    doc.text(quote.clients?.profiles?.full_name || 'Client', 20, 50)
+    if (quote.clients?.profiles?.email) {
+      doc.setFontSize(10)
+      doc.setTextColor(138, 149, 163)
+      doc.text(quote.clients.profiles.email, 20, 57)
+    }
+    doc.setFontSize(11)
+    doc.setTextColor(13, 33, 68)
+    doc.text('Services:', 20, 70)
+    doc.setFontSize(10)
+    doc.setTextColor(26, 37, 53)
+    doc.text(quote.services || '', 20, 78)
+    if (quote.description) {
+      doc.setFontSize(10)
+      doc.setTextColor(138, 149, 163)
+      doc.text(quote.description, 20, 86, { maxWidth: 170 })
+    }
+    doc.line(20, 105, 190, 105)
+    doc.setFontSize(12)
+    doc.setTextColor(13, 33, 68)
+    doc.text('Payment Schedule', 20, 115)
+    ;(doc as any).autoTable({
+      startY: 121,
+      head: [['Description', 'Amount']],
+      body: [
+        ['60% Deposit — Due Before Job Starts', `$${Number(quote.deposit_amount).toLocaleString()}`],
+        ['40% Balance — Due On Completion', `$${Number(quote.balance_amount).toLocaleString()}`],
+        ['TOTAL', `$${Number(quote.total_amount).toLocaleString()}`],
+      ],
+      headStyles: { fillColor: [13, 33, 68], textColor: 255, fontStyle: 'bold' },
+      bodyStyles: { textColor: [26, 37, 53] },
+      alternateRowStyles: { fillColor: [244, 246, 249] },
+      columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+      styles: { fontSize: 11 },
+    })
+    doc.setFontSize(10)
+    doc.setTextColor(138, 149, 163)
+    doc.text('This quote is valid for 30 days from the date issued.', 20, 220)
+    doc.text('Thank you for choosing Precision Post Cleaning Co.', 20, 228)
+    doc.save(`PrecisionPost-Quote-${quote.clients?.profiles?.full_name || 'Client'}.pdf`)
   }
 
   const updateQuoteStatus = async (id: string, status: string) => {
@@ -321,23 +383,20 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   }
 
   const signOut = async () => { await supabase.auth.signOut() }
-
   const getJobCleaners = (jobId: string) => jobCleaners.filter(jc => jc.job_id === jobId)
-
   const calcHours = (clockIn: string, clockOut: string) => {
     if (!clockIn || !clockOut) return 0
-    const diff = (new Date(clockOut).getTime() - new Date(clockIn).getTime()) / (1000 * 60 * 60)
-    return Math.round(diff * 10) / 10
+    return Math.round((new Date(clockOut).getTime() - new Date(clockIn).getTime()) / (1000 * 60 * 60) * 10) / 10
   }
 
   const newConsultations = consultations.filter(c => c.status === 'new').length
-  const pendingInvoices = invoices.filter(i => i.status === 'pending')
-  const totalOutstanding = pendingInvoices.reduce((a, b) => a + (b.amount || 0), 0)
+  const totalOutstanding = invoices.filter(i => i.status === 'pending').reduce((a, b) => a + (b.amount || 0), 0)
   const todayJobs = jobs.filter(j => j.scheduled_date === new Date().toISOString().split('T')[0])
-
-  const calcResult = calcJobCost && calcWorkers
-    ? { workerPool: Number(calcJobCost) * 0.4, perWorker: (Number(calcJobCost) * 0.4) / Number(calcWorkers), business: Number(calcJobCost) * 0.6 }
-    : null
+  const calcResult = calcJobCost && calcWorkers ? {
+    workerPool: Number(calcJobCost) * 0.4,
+    perWorker: (Number(calcJobCost) * 0.4) / Number(calcWorkers),
+    business: Number(calcJobCost) * 0.6
+  } : null
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.offWhite, fontFamily: "'Barlow', sans-serif" }}>
@@ -457,18 +516,16 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                   <Badge label={q.status} color={q.status === 'accepted' ? 'green' : q.status === 'declined' ? 'red' : q.status === 'sent' ? 'yellow' : 'gray'} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
-                  <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const }}>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>${q.total_amount?.toLocaleString()}</div>
-                    <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>Total</div>
-                  </div>
-                  <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const }}>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: q.deposit_paid ? '#109648' : C.red }}>${q.deposit_amount?.toLocaleString()}</div>
-                    <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>60% Deposit {q.deposit_paid ? '✓ Paid' : '- Due Before Start'}</div>
-                  </div>
-                  <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const }}>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>${q.balance_amount?.toLocaleString()}</div>
-                    <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>40% Balance - On Completion</div>
-                  </div>
+                  {[
+                    { label: 'Total', val: `$${Number(q.total_amount).toLocaleString()}`, color: C.navy },
+                    { label: '60% Deposit', val: `$${Number(q.deposit_amount).toLocaleString()}`, color: q.deposit_paid ? '#109648' : C.red },
+                    { label: '40% Balance', val: `$${Number(q.balance_amount).toLocaleString()}`, color: C.navy },
+                  ].map(s => (
+                    <div key={s.label} style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const }}>
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: s.color }}>{s.val}</div>
+                      <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>{s.label}</div>
+                    </div>
+                  ))}
                 </div>
                 {q.deposit_paid && (
                   <div style={{ background: 'rgba(16,150,72,0.08)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 12, color: '#109648' }}>
@@ -476,11 +533,12 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                  <Btn onClick={() => downloadQuotePDF(q)} variant="outline" style={{ padding: '6px 14px', fontSize: 12 }}>📥 Download PDF</Btn>
                   {q.status === 'draft' && <Btn onClick={() => updateQuoteStatus(q.id, 'sent')} style={{ padding: '6px 14px', fontSize: 12 }}>Mark as Sent</Btn>}
                   {q.status === 'sent' && <Btn onClick={() => updateQuoteStatus(q.id, 'accepted')} variant="outline" style={{ padding: '6px 14px', fontSize: 12 }}>Mark Accepted</Btn>}
                   {!q.deposit_paid && q.status === 'accepted' && (
                     <>
-                      <div style={{ color: C.midGray, fontSize: 12, alignSelf: 'center' }}>Deposit payment:</div>
+                      <span style={{ color: C.midGray, fontSize: 12, alignSelf: 'center' }}>Deposit:</span>
                       <Btn onClick={() => markDepositPaid(q.id, 'square')} style={{ padding: '6px 12px', fontSize: 11 }}>Square</Btn>
                       <Btn onClick={() => markDepositPaid(q.id, 'zelle')} variant="outline" style={{ padding: '6px 12px', fontSize: 11 }}>Zelle</Btn>
                       <Btn onClick={() => markDepositPaid(q.id, 'cash')} variant="outline" style={{ padding: '6px 12px', fontSize: 11 }}>Cash</Btn>
@@ -635,7 +693,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10 }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                      <span style={{ color: C.midGray, fontSize: 11, fontWeight: 700 }}>{inv.invoice_number || 'INV'}</span>
+                      {inv.invoice_number && <span style={{ color: C.midGray, fontSize: 11, fontWeight: 700 }}>{inv.invoice_number}</span>}
                       <Badge label={inv.status} color={inv.status === 'paid' ? 'green' : inv.status === 'overdue' ? 'red' : 'yellow'} />
                     </div>
                     <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{inv.clients?.profiles?.full_name || 'Client'}</div>
@@ -827,15 +885,15 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           <Input label="Services" value={quoteForm.services} onChange={(e: any) => setQuoteForm((f: any) => ({ ...f, services: e.target.value }))} placeholder="e.g. Post-Construction Clean" />
           <Textarea label="Description / Scope of Work" value={quoteForm.description} onChange={(e: any) => setQuoteForm((f: any) => ({ ...f, description: e.target.value }))} placeholder="Detail the work to be performed..." />
           <Input label="Total Amount ($)" type="number" value={quoteForm.total_amount} onChange={(e: any) => setQuoteForm((f: any) => ({ ...f, total_amount: e.target.value }))} placeholder="0" />
-          {quoteForm.total_amount && (
+          {quoteForm.total_amount && Number(quoteForm.total_amount) > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const }}>
                 <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.red }}>${(Number(quoteForm.total_amount) * 0.6).toFixed(2)}</div>
-                <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>60% Deposit Due Before Start</div>
+                <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>60% Deposit</div>
               </div>
               <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const }}>
                 <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>${(Number(quoteForm.total_amount) * 0.4).toFixed(2)}</div>
-                <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>40% Balance On Completion</div>
+                <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>40% Balance</div>
               </div>
             </div>
           )}
@@ -919,10 +977,8 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
       {confirmAction && (
         <Modal title="Confirm Action" onClose={() => setConfirmAction(null)}>
           <div style={{ color: C.text, fontSize: 15, marginBottom: 20 }}>
-            {confirmAction.type === 'terminate'
-              ? `Are you sure you want to terminate ${confirmAction.cleaner.profiles?.full_name}?`
-              : confirmAction.type === 'deactivate'
-              ? `Deactivate ${confirmAction.cleaner.profiles?.full_name}?`
+            {confirmAction.type === 'terminate' ? `Terminate ${confirmAction.cleaner.profiles?.full_name}?`
+              : confirmAction.type === 'deactivate' ? `Deactivate ${confirmAction.cleaner.profiles?.full_name}?`
               : `Reactivate ${confirmAction.cleaner.profiles?.full_name}?`}
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
