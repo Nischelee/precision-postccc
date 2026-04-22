@@ -28,28 +28,50 @@ export default function CleanerDashboard({ profile }: { profile: any }) {
   useEffect(() => { fetchJobs() }, [])
 
   const fetchJobs = async () => {
-    const { data: cleaner } = await supabase
+    // Step 1: get the cleaner record
+    const { data: cleaner, error: cleanerError } = await supabase
       .from('cleaners')
-      .select('*, profiles(full_name, email, phone)')
+      .select('id, profile_id, profiles(full_name, email, phone)')
       .eq('profile_id', profile.id)
       .maybeSingle()
 
-    if (!cleaner) { setLoading(false); return }
+    if (!cleaner) { 
+      console.log('No cleaner found for profile:', profile.id)
+      setLoading(false)
+      return 
+    }
+
     setCleanerProfile(cleaner)
 
-    const { data: jobCleaners } = await supabase
+    // Step 2: get job assignments for this cleaner
+    const { data: jobCleaners, error: jcError } = await supabase
       .from('job_cleaners')
-      .select('*, jobs(*)')
+      .select('*')
       .eq('cleaner_id', cleaner.id)
-      .order('created_at', { ascending: false })
 
-    const jobList = jobCleaners?.map((jc: any) => ({
-      ...jc.jobs,
-      job_cleaner_id: jc.id,
-      clock_in: jc.clock_in,
-      clock_out: jc.clock_out,
-      completed: jc.completed,
-    })) || []
+    if (!jobCleaners || jobCleaners.length === 0) {
+      console.log('No job assignments found for cleaner:', cleaner.id)
+      setLoading(false)
+      return
+    }
+
+    // Step 3: get the actual jobs
+    const jobIds = jobCleaners.map((jc: any) => jc.job_id)
+    const { data: jobData } = await supabase
+      .from('jobs')
+      .select('*')
+      .in('id', jobIds)
+
+    const jobList = jobCleaners.map((jc: any) => {
+      const job = jobData?.find((j: any) => j.id === jc.job_id)
+      return {
+        ...job,
+        job_cleaner_id: jc.id,
+        clock_in: jc.clock_in,
+        clock_out: jc.clock_out,
+        completed: jc.completed,
+      }
+    }).filter((j: any) => j.id)
 
     setJobs(jobList)
     setLoading(false)
