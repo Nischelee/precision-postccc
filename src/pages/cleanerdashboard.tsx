@@ -32,7 +32,7 @@ export default function CleanerDashboard({ profile }: { profile: any }) {
       .from('cleaners')
       .select('*, profiles(full_name, email, phone)')
       .eq('profile_id', profile.id)
-      .single()
+      .maybeSingle()
 
     if (!cleaner) { setLoading(false); return }
     setCleanerProfile(cleaner)
