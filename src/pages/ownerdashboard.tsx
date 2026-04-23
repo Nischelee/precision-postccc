@@ -826,7 +826,52 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                     return (
                       <div key={jc.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: `1px solid ${C.lightGray}`, fontSize: 13 }}>
                         <span style={{ color: C.text }}>{job.title}</span>
-                        <span style={{ color: C.midGray }}>{hours}h · <strong style={{ color: C.navy }}>${pay.toFixed(2)}</strong></span>
+<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+  <span style={{ color: C.midGray }}>{hours}h · <strong style={{ color: C.navy }}>${pay.toFixed(2)}</strong></span>
+  <button onClick={() => {
+    const doc = new jsPDF()
+    doc.setFontSize(20)
+    doc.setTextColor(13, 33, 68)
+    doc.text('PRECISION POST CLEANING CO.', 20, 20)
+    doc.setFontSize(10)
+    doc.setTextColor(138, 149, 163)
+    doc.text('precisionpostcleaningco.com | Built Rough. Finished Right.', 20, 28)
+    doc.setFontSize(16)
+    doc.setTextColor(13, 33, 68)
+    doc.text('PAY STUB', 160, 20)
+    doc.setFontSize(10)
+    doc.setTextColor(138, 149, 163)
+    doc.text(new Date().toLocaleDateString(), 160, 28)
+    doc.setDrawColor(214, 220, 230)
+    doc.line(20, 33, 190, 33)
+    doc.setFontSize(12)
+    doc.setTextColor(13, 33, 68)
+    doc.text('Employee:', 20, 45)
+    doc.setFontSize(14)
+    doc.setTextColor(26, 37, 53)
+    doc.text(cleaner.profiles?.full_name || '', 20, 53)
+    autoTable(doc, {
+      startY: 65,
+      head: [['Job', 'Date', 'Hours', 'Pay']],
+      body: [[
+        job.title,
+        job.scheduled_date || '',
+        `${hours}h`,
+        `$${pay.toFixed(2)}`
+      ]],
+      headStyles: { fillColor: [13, 33, 68], textColor: 255, fontStyle: 'bold' },
+      bodyStyles: { textColor: [26, 37, 53] },
+      alternateRowStyles: { fillColor: [244, 246, 249] },
+      styles: { fontSize: 11 },
+    })
+    doc.setFontSize(10)
+    doc.setTextColor(138, 149, 163)
+    doc.text('Thank you for your hard work!', 20, 130)
+    doc.text('Built Rough. Finished Right.', 20, 138)
+    doc.save(`PayStub-${cleaner.profiles?.full_name}-${job.title}.pdf`)
+  }} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>📥 Pay Stub</button>
+</div>
+
                       </div>
                     )
                   })}
