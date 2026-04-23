@@ -218,13 +218,13 @@ export default function ClientDashboard({ profile }: { profile: any }) {
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 4 }}>Precision Post Cleaning Co.</div>
               <div style={{ color: C.midGray, fontSize: 13, marginBottom: 20 }}>Built Rough. Finished Right.</div>
               <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
-                <a href="tel:+1" style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.navy, borderRadius: 10, padding: '14px 18px', color: C.white, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
+                <a href="tel:+16093046924" style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.navy, borderRadius: 10, padding: '14px 18px', color: C.white, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
                   <span style={{ fontSize: 20 }}>📞</span> Call Us
                 </a>
                 <a href="mailto:nischelee@precisionpostcleaningco.com" style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 18px', color: C.navy, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
                   <span style={{ fontSize: 20 }}>✉️</span> Email Us
                 </a>
-                <a href="sms:+1" style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 18px', color: C.navy, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
+                <a href="sms:+16093046924" style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 18px', color: C.navy, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
                   <span style={{ fontSize: 20 }}>💬</span> Send a Text
                 </a>
               </div>
