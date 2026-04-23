@@ -221,7 +221,9 @@ export default function ClientDashboard({ profile }: { profile: any }) {
                 <a href="tel:+16093046924" style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.navy, borderRadius: 10, padding: '14px 18px', color: C.white, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
                   <span style={{ fontSize: 20 }}>📞</span> Call Us
                 </a>
-                <a href="mailto:nischelee@precisionpostcleaningco.com" style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 18px', color: C.navy, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
+                <a href="mailto:nischelee@precisionpostcleaningco.com" <a href="mailto:denielle@precisionpostcleaningco.com" style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 18px', color: C.navy, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
+  <span style={{ fontSize: 20 }}>✉️</span> Email Denielle
+</a> style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 18px', color: C.navy, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
                   <span style={{ fontSize: 20 }}>✉️</span> Email Us
                 </a>
                 <a href="sms:+16093046924" style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 18px', color: C.navy, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
