@@ -144,7 +144,8 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
 
   const convertToJob = async (consultation: any) => {
     await supabase.from('jobs').insert([{
-      title: `${consultation.service_type} - ${consultation.name}`,
+      title: consultation.service_type,
+
       type: consultation.service_type,
       address: consultation.address,
       status: 'scheduled',
