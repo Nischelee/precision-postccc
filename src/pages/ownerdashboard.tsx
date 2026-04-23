@@ -745,7 +745,8 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                     <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>Due: {inv.due_date}</div>
                     {inv.status === 'paid' && inv.paid_at && <div style={{ color: '#109648', fontSize: 12 }}>✅ Paid {new Date(inv.paid_at).toLocaleDateString()} via {inv.payment_method}</div>}
                     {inv.notes && <div style={{ color: C.darkGray, fontSize: 12, marginTop: 2 }}>📝 {inv.notes}</div>}
-                   <button onClick={() => downloadInvoicePDF(inv)} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, marginTop: 6, fontFamily: 'inherit', textDecoration: 'underline' }}>📥 Download PDF</button>
+                  
+                    <button onClick={() => downloadInvoicePDF(inv)} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, marginTop: 6, fontFamily: 'inherit', textDecoration: 'underline' }}>📥 Download PDF</button>
                    <button onClick={() => { setInvoiceForm({ ...inv, job_title: 'Invoice', client_name: inv.clients?.profiles?.full_name || 'Client', editing: true }); setShowModal('invoice') }} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, marginTop: 6, fontFamily: 'inherit', textDecoration: 'underline' }}>✏️ Edit Invoice</button>
                   </div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' as const }}>
