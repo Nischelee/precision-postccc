@@ -27,6 +27,7 @@ const NAV = [
   { id: 'invoices', label: 'Invoices', icon: '💰' },
   { id: 'payroll', label: 'Payroll', icon: '💵' },
   { id: 'messages', label: 'Messages', icon: '💬' },
+  { id: 'calculator', label: 'Calculator', icon: '🧮' },
   { id: 'services', label: 'Services', icon: '⚙️' },
 ]
 
@@ -965,6 +966,313 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           </div>
         )}
       </div>
+{tab === 'calculator' && (
+  <div>
+    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Job Price Calculator</div>
+
+    {(() => {
+      const [serviceType, setServiceType] = React.useState('pc_commercial')
+      const [sqft, setSqft] = React.useState('')
+      const [bathrooms, setBathrooms] = React.useState(0)
+      const [kitchens, setKitchens] = React.useState(0)
+      const [lobbies, setLobbies] = React.useState(0)
+      const [garages, setGarages] = React.useState(0)
+      const [windows, setWindows] = React.useState(0)
+      const [carpetSqft, setCarpetSqft] = React.useState('')
+      const [frequency, setFrequency] = React.useState('monthly')
+      const [numCleaners, setNumCleaners] = React.useState(2)
+      const [includeDebris, setIncludeDebris] = React.useState(false)
+      const [includeWax, setIncludeWax] = React.useState(false)
+      const [includeCarpet, setIncludeCarpet] = React.useState(false)
+      const [includeWindows, setIncludeWindows] = React.useState(false)
+      const [includeCeiling, setIncludeCeiling] = React.useState(false)
+
+      const isPostConstruction = serviceType === 'pc_commercial' || serviceType === 'pc_residential'
+      const isCommercial = serviceType === 'commercial_regular' || serviceType === 'commercial_deep'
+
+      const calculate = () => {
+        const sf = Number(sqft) || 0
+        if (sf === 0) return null
+
+        let baseRate = 0
+        let bathroomRate = 0
+        let kitchenRate = 0
+        let lobbyRate = 0
+        let garageRate = 0
+        let minimum = 0
+
+        if (serviceType === 'pc_commercial') { baseRate = 0.50; bathroomRate = 100; kitchenRate = 120; lobbyRate = 100; minimum = 750 }
+        if (serviceType === 'pc_residential') { baseRate = 0.40; bathroomRate = 85; kitchenRate = 100; garageRate = 75; minimum = 500 }
+        if (serviceType === 'commercial_regular') { baseRate = 0.12; bathroomRate = 50; kitchenRate = 65; minimum = 300 }
+        if (serviceType === 'commercial_deep') { baseRate = 0.30; bathroomRate = 75; kitchenRate = 90; minimum = 500 }
+
+        let base = sf * baseRate
+        let rooms = (bathrooms * bathroomRate) + (kitchens * kitchenRate) + (lobbies * lobbyRate) + (garages * garageRate)
+        let addons = 0
+        if (includeDebris) addons += 125
+        if (includeWax) addons += sf * 0.15
+        if (includeCarpet) addons += Number(carpetSqft) * 0.20
+        if (includeWindows) addons += windows * 8
+        if (includeCeiling) addons += sf * 0.10
+
+        let subtotal = Math.max(base + rooms + addons, minimum)
+
+        let discount = 0
+        if (isCommercial) {
+          if (frequency === 'weekly') discount = subtotal * 0.15
+          if (frequency === 'biweekly') discount = subtotal * 0.10
+        }
+
+        let total = subtotal - discount
+        let deposit = total * 0.6
+        let balance = total * 0.4
+        let workerPool = total * 0.4
+        let perCleaner = workerPool / numCleaners
+
+        // Time estimates
+        let hoursPerCleaner = sf / 250
+        if (serviceType === 'commercial_regular') hoursPerCleaner = sf / 350
+
+        return { base, rooms, addons, subtotal, discount, total, deposit, balance, workerPool, perCleaner, hoursPerCleaner }
+      }
+
+      const result = calculate()
+
+      return (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          {/* LEFT — Inputs */}
+          <div>
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Service Type</div>
+              {[
+                { id: 'pc_commercial', label: 'Post-Construction Commercial' },
+                { id: 'pc_residential', label: 'Post-Construction Residential' },
+                { id: 'commercial_regular', label: 'Commercial Regular Clean' },
+                { id: 'commercial_deep', label: 'Commercial Deep Clean' },
+              ].map(s => (
+                <div key={s.id} onClick={() => setServiceType(s.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: serviceType === s.id ? 'rgba(13,33,68,0.08)' : 'transparent', border: `1px solid ${serviceType === s.id ? C.navy : C.border}` }}>
+                  <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${serviceType === s.id ? C.navy : C.border}`, background: serviceType === s.id ? C.navy : 'transparent', flexShrink: 0 }} />
+                  <span style={{ color: C.text, fontSize: 13, fontWeight: serviceType === s.id ? 700 : 400 }}>{s.label}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Space Details</div>
+              <Input label="Total Square Footage" type="number" value={sqft} onChange={(e: any) => setSqft(e.target.value)} placeholder="e.g. 3000" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Bathrooms</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button onClick={() => setBathrooms(Math.max(0, bathrooms - 1))} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>-</button>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{bathrooms}</span>
+                    <button onClick={() => setBathrooms(bathrooms + 1)} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Kitchens</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button onClick={() => setKitchens(Math.max(0, kitchens - 1))} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>-</button>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{kitchens}</span>
+                    <button onClick={() => setKitchens(kitchens + 1)} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
+                  </div>
+                </div>
+                {serviceType === 'pc_commercial' && (
+                  <div>
+                    <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Lobbies</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button onClick={() => setLobbies(Math.max(0, lobbies - 1))} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>-</button>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{lobbies}</span>
+                      <button onClick={() => setLobbies(lobbies + 1)} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
+                    </div>
+                  </div>
+                )}
+                {serviceType === 'pc_residential' && (
+                  <div>
+                    <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Garages</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button onClick={() => setGarages(Math.max(0, garages - 1))} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>-</button>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{garages}</span>
+                      <button onClick={() => setGarages(garages + 1)} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {isCommercial && (
+              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+                <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Frequency</div>
+                {[
+                  { id: 'monthly', label: 'Monthly — Full Price' },
+                  { id: 'biweekly', label: 'Bi-Weekly — 10% Off' },
+                  { id: 'weekly', label: 'Weekly — 15% Off' },
+                ].map(f => (
+                  <div key={f.id} onClick={() => setFrequency(f.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: frequency === f.id ? 'rgba(13,33,68,0.08)' : 'transparent', border: `1px solid ${frequency === f.id ? C.navy : C.border}` }}>
+                    <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${frequency === f.id ? C.navy : C.border}`, background: frequency === f.id ? C.navy : 'transparent', flexShrink: 0 }} />
+                    <span style={{ color: C.text, fontSize: 13, fontWeight: frequency === f.id ? 700 : 400 }}>{f.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Add-Ons</div>
+              {[
+                { key: 'debris', label: 'Debris Removal', desc: '$125 flat', checked: includeDebris, set: setIncludeDebris },
+                { key: 'wax', label: 'Floor Waxing & Buffing', desc: '$0.15/sq ft', checked: includeWax, set: setIncludeWax },
+                { key: 'ceiling', label: 'High-Dust/Ceiling Clean', desc: '$0.10/sq ft', checked: includeCeiling, set: setIncludeCeiling },
+              ].map(a => (
+                <div key={a.key} onClick={() => a.set(!a.checked)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: a.checked ? 'rgba(200,16,46,0.06)' : 'transparent', border: `1px solid ${a.checked ? C.red : C.border}` }}>
+                  <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${a.checked ? C.red : C.border}`, background: a.checked ? C.red : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {a.checked && <span style={{ color: C.white, fontSize: 11, fontWeight: 800 }}>✓</span>}
+                  </div>
+                  <div>
+                    <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>{a.label}</div>
+                    <div style={{ color: C.midGray, fontSize: 11 }}>{a.desc}</div>
+                  </div>
+                </div>
+              ))}
+              <div onClick={() => setIncludeWindows(!includeWindows)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: includeWindows ? 'rgba(200,16,46,0.06)' : 'transparent', border: `1px solid ${includeWindows ? C.red : C.border}` }}>
+                <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeWindows ? C.red : C.border}`, background: includeWindows ? C.red : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {includeWindows && <span style={{ color: C.white, fontSize: 11, fontWeight: 800 }}>✓</span>}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>Window Cleaning</div>
+                  <div style={{ color: C.midGray, fontSize: 11 }}>$8 per window</div>
+                </div>
+              </div>
+              {includeWindows && (
+                <div style={{ paddingLeft: 28, marginBottom: 6 }}>
+                  <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Number of Windows</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button onClick={() => setWindows(Math.max(0, windows - 1))} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>-</button>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{windows}</span>
+                    <button onClick={() => setWindows(windows + 1)} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
+                  </div>
+                </div>
+              )}
+              <div onClick={() => setIncludeCarpet(!includeCarpet)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: includeCarpet ? 'rgba(200,16,46,0.06)' : 'transparent', border: `1px solid ${includeCarpet ? C.red : C.border}` }}>
+                <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeCarpet ? C.red : C.border}`, background: includeCarpet ? C.red : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {includeCarpet && <span style={{ color: C.white, fontSize: 11, fontWeight: 800 }}>✓</span>}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>Carpet Steam Cleaning</div>
+                  <div style={{ color: C.midGray, fontSize: 11 }}>$0.20 per sq ft of carpet</div>
+                </div>
+              </div>
+              {includeCarpet && (
+                <div style={{ paddingLeft: 28, marginBottom: 6 }}>
+                  <Input label="Carpet Square Footage" type="number" value={carpetSqft} onChange={(e: any) => setCarpetSqft(e.target.value)} placeholder="e.g. 1000" />
+                </div>
+              )}
+            </div>
+
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Crew</div>
+              <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8 }}>Number of Cleaners</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button onClick={() => setNumCleaners(Math.max(1, numCleaners - 1))} style={{ width: 36, height: 36, borderRadius: 8, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 18, fontWeight: 700 }}>-</button>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 800, color: C.navy, minWidth: 40, textAlign: 'center' as const }}>{numCleaners}</span>
+                <button onClick={() => setNumCleaners(numCleaners + 1)} style={{ width: 36, height: 36, borderRadius: 8, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 18, fontWeight: 700 }}>+</button>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT — Results */}
+          <div>
+            {!result ? (
+              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 32, textAlign: 'center' as const }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🧮</div>
+                <div style={{ color: C.midGray, fontSize: 14 }}>Enter square footage to see your estimate</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ background: C.navy, borderRadius: 12, padding: 24, marginBottom: 16, color: C.white }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, opacity: 0.6, marginBottom: 8 }}>Total Job Price</div>
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 800 }}>${result.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  {result.discount > 0 && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>Includes {frequency === 'weekly' ? '15%' : '10%'} frequency discount (saved ${result.discount.toFixed(2)})</div>}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                  <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16 }}>
+                    <div style={{ color: C.red, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, marginBottom: 4 }}>60% Deposit</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy }}>${result.deposit.toFixed(2)}</div>
+                    <div style={{ color: C.midGray, fontSize: 11 }}>Due before start</div>
+                  </div>
+                  <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16 }}>
+                    <div style={{ color: C.navy, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, marginBottom: 4 }}>40% Balance</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy }}>${result.balance.toFixed(2)}</div>
+                    <div style={{ color: C.midGray, fontSize: 11 }}>Due on completion</div>
+                  </div>
+                </div>
+
+                <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+                  <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Price Breakdown</div>
+                  {[
+                    { label: 'Base (sq ft)', val: result.base },
+                    { label: 'Rooms', val: result.rooms },
+                    { label: 'Add-Ons', val: result.addons },
+                    { label: 'Frequency Discount', val: -result.discount },
+                  ].filter(r => r.val !== 0).map(r => (
+                    <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${C.lightGray}`, fontSize: 13 }}>
+                      <span style={{ color: C.darkGray }}>{r.label}</span>
+                      <span style={{ color: r.val < 0 ? '#109648' : C.navy, fontWeight: 600 }}>{r.val < 0 ? '-' : ''}${Math.abs(r.val).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+                  <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Crew Pay (40% Pool)</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ color: C.darkGray, fontSize: 13 }}>Total Worker Pool</span>
+                    <span style={{ color: C.navy, fontWeight: 700 }}>${result.workerPool.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ color: C.darkGray, fontSize: 13 }}>Per Cleaner ({numCleaners} workers)</span>
+                    <span style={{ color: C.red, fontWeight: 700 }}>${result.perCleaner.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: C.darkGray, fontSize: 13 }}>Business Keeps (60%)</span>
+                    <span style={{ color: '#109648', fontWeight: 700 }}>${(result.total * 0.6).toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {isPostConstruction && (
+                  <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+                    <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>3-Day Schedule Estimate</div>
+                    {[
+                      { day: 'Day 1', stage: 'Stage 1 — Rough Clean', hours: '6-7 hours', desc: 'Debris removal, sweep, basic clean' },
+                      { day: 'Day 2', stage: 'Stage 2 — Final Clean', hours: '8-9 hours', desc: 'Deep detailed clean, windows, fixtures' },
+                      { day: 'Day 3', stage: 'Stage 3 — Touch-Up & Handover', hours: '4-5 hours', desc: 'Final pass, wax floors, hand over to client' },
+                    ].map(d => (
+                      <div key={d.day} style={{ display: 'flex', gap: 12, marginBottom: 12, padding: '10px 12px', background: C.offWhite, borderRadius: 8 }}>
+                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 800, color: C.navy, minWidth: 45 }}>{d.day}</div>
+                        <div>
+                          <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{d.stage}</div>
+                          <div style={{ color: C.red, fontSize: 12, fontWeight: 600 }}>{d.hours} · {numCleaners} cleaners</div>
+                          <div style={{ color: C.midGray, fontSize: 11 }}>{d.desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {isCommercial && (
+                  <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+                    <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Time Estimate</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 800, color: C.navy }}>{(result.hoursPerCleaner / numCleaners).toFixed(1)} hours</div>
+                    <div style={{ color: C.midGray, fontSize: 13 }}>Estimated completion time with {numCleaners} cleaner{numCleaners > 1 ? 's' : ''}</div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )
+    })()}
+  </div>
+)}
 
       {/* Quote Modal */}
       {showModal === 'quote' && quoteForm && (
