@@ -5,16 +5,9 @@ import autoTable from 'jspdf-autotable'
 const supabase = createClient('https://cmxivkphfhxtxhaqevch.supabase.co', 'sb_publishable_G2WC5Z0MrSeqQHqy8PxU0Q_vFy49Lcv')
 
 const C = {
-  navy: '#0D2144',
-  navyDark: '#081729',
-  red: '#C8102E',
-  white: '#FFFFFF',
-  offWhite: '#F4F6F9',
-  lightGray: '#E8ECF2',
-  midGray: '#8A95A3',
-  darkGray: '#4A5568',
-  text: '#1A2535',
-  border: '#D6DCE6',
+  navy: '#0D2144', navyDark: '#081729', red: '#C8102E', white: '#FFFFFF',
+  offWhite: '#F4F6F9', lightGray: '#E8ECF2', midGray: '#8A95A3',
+  darkGray: '#4A5568', text: '#1A2535', border: '#D6DCE6',
 }
 
 const NAV = [
@@ -26,8 +19,8 @@ const NAV = [
   { id: 'cleaners', label: 'Cleaners', icon: '👥' },
   { id: 'invoices', label: 'Invoices', icon: '💰' },
   { id: 'payroll', label: 'Payroll', icon: '💵' },
-  { id: 'messages', label: 'Messages', icon: '💬' },
   { id: 'calculator', label: 'Calculator', icon: '🧮' },
+  { id: 'messages', label: 'Messages', icon: '💬' },
   { id: 'services', label: 'Services', icon: '⚙️' },
 ]
 
@@ -41,18 +34,14 @@ const Badge = ({ label, color = 'navy' }: { label: string, color?: string }) => 
     orange: { bg: 'rgba(200,100,16,0.10)', text: '#C86410' },
   }
   const s = colors[color] || colors.navy
-  return (
-    <span style={{ background: s.bg, color: s.text, fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', padding: '3px 10px', borderRadius: 20, textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const }}>
-      {label}
-    </span>
-  )
+  return <span style={{ background: s.bg, color: s.text, fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', padding: '3px 10px', borderRadius: 20, textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const }}>{label}</span>
 }
 
 const Modal = ({ title, onClose, children }: any) => (
   <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
     <div style={{ background: C.white, borderRadius: 14, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' as const, padding: 28, boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
-        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{title}</span>
+        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const }}>{title}</span>
         <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.midGray, cursor: 'pointer', fontSize: 24 }}>×</button>
       </div>
       {children}
@@ -83,6 +72,275 @@ const Btn = ({ children, onClick, variant = 'primary', style: s }: any) => (
     cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.04em', ...s
   }}>{children}</button>
 )
+
+function CalculatorTab() {
+  const [serviceType, setServiceType] = useState('pc_commercial')
+  const [sqft, setSqft] = useState('')
+  const [bathrooms, setBathrooms] = useState(0)
+  const [kitchens, setKitchens] = useState(0)
+  const [lobbies, setLobbies] = useState(0)
+  const [garages, setGarages] = useState(0)
+  const [windows, setWindows] = useState(0)
+  const [carpetSqft, setCarpetSqft] = useState('')
+  const [frequency, setFrequency] = useState('monthly')
+  const [numCleaners, setNumCleaners] = useState(2)
+  const [includeDebris, setIncludeDebris] = useState(false)
+  const [includeWax, setIncludeWax] = useState(false)
+  const [includeCarpet, setIncludeCarpet] = useState(false)
+  const [includeWindows, setIncludeWindows] = useState(false)
+  const [includeCeiling, setIncludeCeiling] = useState(false)
+
+  const isPostConstruction = serviceType === 'pc_commercial' || serviceType === 'pc_residential'
+  const isCommercial = serviceType === 'commercial_regular' || serviceType === 'commercial_deep'
+
+  const calculate = () => {
+    const sf = Number(sqft) || 0
+    if (sf === 0) return null
+    let baseRate = 0, bathroomRate = 0, kitchenRate = 0, lobbyRate = 0, garageRate = 0, minimum = 0
+    if (serviceType === 'pc_commercial') { baseRate = 0.50; bathroomRate = 100; kitchenRate = 120; lobbyRate = 100; minimum = 750 }
+    if (serviceType === 'pc_residential') { baseRate = 0.40; bathroomRate = 85; kitchenRate = 100; garageRate = 75; minimum = 500 }
+    if (serviceType === 'commercial_regular') { baseRate = 0.12; bathroomRate = 50; kitchenRate = 65; minimum = 300 }
+    if (serviceType === 'commercial_deep') { baseRate = 0.30; bathroomRate = 75; kitchenRate = 90; minimum = 500 }
+    const base = sf * baseRate
+    const rooms = (bathrooms * bathroomRate) + (kitchens * kitchenRate) + (lobbies * lobbyRate) + (garages * garageRate)
+    let addons = 0
+    if (includeDebris) addons += 125
+    if (includeWax) addons += sf * 0.15
+    if (includeCarpet) addons += Number(carpetSqft) * 0.20
+    if (includeWindows) addons += windows * 8
+    if (includeCeiling) addons += sf * 0.10
+    const subtotal = Math.max(base + rooms + addons, minimum)
+    let discount = 0
+    if (isCommercial) {
+      if (frequency === 'weekly') discount = subtotal * 0.15
+      if (frequency === 'biweekly') discount = subtotal * 0.10
+    }
+    const total = subtotal - discount
+    return {
+      base, rooms, addons, subtotal, discount, total,
+      deposit: total * 0.6, balance: total * 0.4,
+      workerPool: total * 0.4, perCleaner: (total * 0.4) / numCleaners,
+      hoursPerCleaner: sf / (serviceType === 'commercial_regular' ? 350 : 250)
+    }
+  }
+
+  const result = calculate()
+
+  const counterBtn = (style?: any) => ({
+    width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`,
+    background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700,
+    fontFamily: 'inherit', ...style
+  })
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div>
+        {/* Service Type */}
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+          <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Service Type</div>
+          {[
+            { id: 'pc_commercial', label: 'Post-Construction Commercial' },
+            { id: 'pc_residential', label: 'Post-Construction Residential' },
+            { id: 'commercial_regular', label: 'Commercial Regular Clean' },
+            { id: 'commercial_deep', label: 'Commercial Deep Clean' },
+          ].map(s => (
+            <div key={s.id} onClick={() => setServiceType(s.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: serviceType === s.id ? 'rgba(13,33,68,0.08)' : 'transparent', border: `1px solid ${serviceType === s.id ? C.navy : C.border}` }}>
+              <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${serviceType === s.id ? C.navy : C.border}`, background: serviceType === s.id ? C.navy : 'transparent', flexShrink: 0 }} />
+              <span style={{ color: C.text, fontSize: 13, fontWeight: serviceType === s.id ? 700 : 400 }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Space Details */}
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+          <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Space Details</div>
+          <Input label="Total Square Footage" type="number" value={sqft} onChange={(e: any) => setSqft(e.target.value)} placeholder="e.g. 3000" />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {[
+              { label: 'Bathrooms', val: bathrooms, set: setBathrooms },
+              { label: 'Kitchens', val: kitchens, set: setKitchens },
+              ...(serviceType === 'pc_commercial' ? [{ label: 'Lobbies', val: lobbies, set: setLobbies }] : []),
+              ...(serviceType === 'pc_residential' ? [{ label: 'Garages', val: garages, set: setGarages }] : []),
+            ].map((r: any) => (
+              <div key={r.label}>
+                <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>{r.label}</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button onClick={() => r.set(Math.max(0, r.val - 1))} style={counterBtn()}>-</button>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{r.val}</span>
+                  <button onClick={() => r.set(r.val + 1)} style={counterBtn()}>+</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Frequency */}
+        {isCommercial && (
+          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+            <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Frequency</div>
+            {[
+              { id: 'monthly', label: 'Monthly — Full Price' },
+              { id: 'biweekly', label: 'Bi-Weekly — 10% Off' },
+              { id: 'weekly', label: 'Weekly — 15% Off' },
+            ].map(f => (
+              <div key={f.id} onClick={() => setFrequency(f.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: frequency === f.id ? 'rgba(13,33,68,0.08)' : 'transparent', border: `1px solid ${frequency === f.id ? C.navy : C.border}` }}>
+                <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${frequency === f.id ? C.navy : C.border}`, background: frequency === f.id ? C.navy : 'transparent', flexShrink: 0 }} />
+                <span style={{ color: C.text, fontSize: 13, fontWeight: frequency === f.id ? 700 : 400 }}>{f.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add-Ons */}
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+          <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Add-Ons</div>
+          {[
+            { key: 'debris', label: 'Debris Removal', desc: '$125 flat', checked: includeDebris, set: setIncludeDebris },
+            { key: 'wax', label: 'Floor Waxing & Buffing', desc: '$0.15/sq ft', checked: includeWax, set: setIncludeWax },
+            { key: 'ceiling', label: 'High-Dust/Ceiling Clean', desc: '$0.10/sq ft', checked: includeCeiling, set: setIncludeCeiling },
+          ].map(a => (
+            <div key={a.key} onClick={() => a.set(!a.checked)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: a.checked ? 'rgba(200,16,46,0.06)' : 'transparent', border: `1px solid ${a.checked ? C.red : C.border}` }}>
+              <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${a.checked ? C.red : C.border}`, background: a.checked ? C.red : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {a.checked && <span style={{ color: C.white, fontSize: 11, fontWeight: 800 }}>✓</span>}
+              </div>
+              <div>
+                <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>{a.label}</div>
+                <div style={{ color: C.midGray, fontSize: 11 }}>{a.desc}</div>
+              </div>
+            </div>
+          ))}
+          <div onClick={() => setIncludeWindows(!includeWindows)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: includeWindows ? 'rgba(200,16,46,0.06)' : 'transparent', border: `1px solid ${includeWindows ? C.red : C.border}` }}>
+            <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeWindows ? C.red : C.border}`, background: includeWindows ? C.red : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {includeWindows && <span style={{ color: C.white, fontSize: 11, fontWeight: 800 }}>✓</span>}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>Window Cleaning</div>
+              <div style={{ color: C.midGray, fontSize: 11 }}>$8 per window</div>
+            </div>
+          </div>
+          {includeWindows && (
+            <div style={{ paddingLeft: 28, marginBottom: 6 }}>
+              <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Number of Windows</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button onClick={() => setWindows(Math.max(0, windows - 1))} style={counterBtn()}>-</button>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{windows}</span>
+                <button onClick={() => setWindows(windows + 1)} style={counterBtn()}>+</button>
+              </div>
+            </div>
+          )}
+          <div onClick={() => setIncludeCarpet(!includeCarpet)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: includeCarpet ? 'rgba(200,16,46,0.06)' : 'transparent', border: `1px solid ${includeCarpet ? C.red : C.border}` }}>
+            <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeCarpet ? C.red : C.border}`, background: includeCarpet ? C.red : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {includeCarpet && <span style={{ color: C.white, fontSize: 11, fontWeight: 800 }}>✓</span>}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>Carpet Steam Cleaning</div>
+              <div style={{ color: C.midGray, fontSize: 11 }}>$0.20 per sq ft of carpet</div>
+            </div>
+          </div>
+          {includeCarpet && (
+            <div style={{ paddingLeft: 28, marginBottom: 6 }}>
+              <Input label="Carpet Square Footage" type="number" value={carpetSqft} onChange={(e: any) => setCarpetSqft(e.target.value)} placeholder="e.g. 1000" />
+            </div>
+          )}
+        </div>
+
+        {/* Crew */}
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+          <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Crew</div>
+          <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8 }}>Number of Cleaners</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={() => setNumCleaners(Math.max(1, numCleaners - 1))} style={counterBtn({ width: 36, height: 36, borderRadius: 8, fontSize: 18 })}>-</button>
+            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 800, color: C.navy, minWidth: 40, textAlign: 'center' as const }}>{numCleaners}</span>
+            <button onClick={() => setNumCleaners(numCleaners + 1)} style={counterBtn({ width: 36, height: 36, borderRadius: 8, fontSize: 18 })}>+</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Results */}
+      <div>
+        {!result ? (
+          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 32, textAlign: 'center' as const }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🧮</div>
+            <div style={{ color: C.midGray, fontSize: 14 }}>Enter square footage to see your estimate</div>
+          </div>
+        ) : (
+          <>
+            <div style={{ background: C.navy, borderRadius: 12, padding: 24, marginBottom: 16, color: C.white }}>
+              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, opacity: 0.6, marginBottom: 8 }}>Total Job Price</div>
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 800 }}>${result.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              {result.discount > 0 && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>Includes {frequency === 'weekly' ? '15%' : '10%'} discount — saved ${result.discount.toFixed(2)}</div>}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16 }}>
+                <div style={{ color: C.red, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, marginBottom: 4 }}>60% Deposit</div>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy }}>${result.deposit.toFixed(2)}</div>
+                <div style={{ color: C.midGray, fontSize: 11 }}>Due before start</div>
+              </div>
+              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16 }}>
+                <div style={{ color: C.navy, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, marginBottom: 4 }}>40% Balance</div>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy }}>${result.balance.toFixed(2)}</div>
+                <div style={{ color: C.midGray, fontSize: 11 }}>Due on completion</div>
+              </div>
+            </div>
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Price Breakdown</div>
+              {[
+                { label: 'Base (sq ft)', val: result.base },
+                { label: 'Rooms', val: result.rooms },
+                { label: 'Add-Ons', val: result.addons },
+                { label: 'Frequency Discount', val: -result.discount },
+              ].filter(r => r.val !== 0).map(r => (
+                <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${C.lightGray}`, fontSize: 13 }}>
+                  <span style={{ color: C.darkGray }}>{r.label}</span>
+                  <span style={{ color: r.val < 0 ? '#109648' : C.navy, fontWeight: 600 }}>{r.val < 0 ? '-' : ''}${Math.abs(r.val).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Crew Pay (40% Pool)</div>
+              {[
+                { label: 'Total Worker Pool', val: `$${result.workerPool.toFixed(2)}`, color: C.navy },
+                { label: `Per Cleaner (${numCleaners} workers)`, val: `$${result.perCleaner.toFixed(2)}`, color: C.red },
+                { label: 'Business Keeps (60%)', val: `$${(result.total * 0.6).toFixed(2)}`, color: '#109648' },
+              ].map(r => (
+                <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${C.lightGray}`, fontSize: 13 }}>
+                  <span style={{ color: C.darkGray }}>{r.label}</span>
+                  <span style={{ color: r.color, fontWeight: 700 }}>{r.val}</span>
+                </div>
+              ))}
+            </div>
+            {isPostConstruction && (
+              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+                <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>3-Day Schedule</div>
+                {[
+                  { day: 'Day 1', stage: 'Stage 1 — Rough Clean', hours: '6-7 hours', desc: 'Debris removal, sweep, basic clean' },
+                  { day: 'Day 2', stage: 'Stage 2 — Final Clean', hours: '8-9 hours', desc: 'Deep detailed clean, windows, fixtures' },
+                  { day: 'Day 3', stage: 'Stage 3 — Touch-Up & Handover', hours: '4-5 hours', desc: 'Final pass, wax floors, hand over to client' },
+                ].map(d => (
+                  <div key={d.day} style={{ display: 'flex', gap: 12, marginBottom: 10, padding: '10px 12px', background: C.offWhite, borderRadius: 8 }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 800, color: C.navy, minWidth: 45 }}>{d.day}</div>
+                    <div>
+                      <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{d.stage}</div>
+                      <div style={{ color: C.red, fontSize: 12, fontWeight: 600 }}>{d.hours} · {numCleaners} cleaners</div>
+                      <div style={{ color: C.midGray, fontSize: 11 }}>{d.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {isCommercial && (
+              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+                <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Time Estimate</div>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 800, color: C.navy }}>{(result.hoursPerCleaner / numCleaners).toFixed(1)} hours</div>
+                <div style={{ color: C.midGray, fontSize: 13 }}>Estimated with {numCleaners} cleaner{numCleaners > 1 ? 's' : ''}</div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function OwnerDashboard({ profile }: { profile: any }) {
   const [tab, setTab] = useState('dashboard')
@@ -146,12 +404,9 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   const convertToJob = async (consultation: any) => {
     await supabase.from('jobs').insert([{
       title: consultation.service_type,
-
       type: consultation.service_type,
       address: consultation.address,
-      status: 'scheduled',
-      price: 0,
-      notes: consultation.message,
+      status: 'scheduled', price: 0, notes: consultation.message,
     }])
     await updateConsultation(consultation.id, 'converted')
     setTab('jobs')
@@ -160,13 +415,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
 
   const openQuoteModal = (consultation: any) => {
     setSelectedConsultation(consultation)
-    setQuoteForm({
-      consultation_id: consultation.id,
-      client_id: '',
-      services: consultation.service_type || '',
-      description: consultation.message || '',
-      total_amount: '',
-    })
+    setQuoteForm({ consultation_id: consultation.id, client_id: '', services: consultation.service_type || '', description: consultation.message || '', total_amount: '' })
     setShowModal('quote')
   }
 
@@ -174,65 +423,36 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     if (!quoteForm || !quoteForm.total_amount) return
     const total = Number(quoteForm.total_amount)
     const { error } = await supabase.from('quotes').insert([{
-      consultation_id: quoteForm.consultation_id,
-      client_id: quoteForm.client_id || null,
-      services: quoteForm.services,
-      description: quoteForm.description,
-      total_amount: total,
-      deposit_amount: total * 0.6,
-      balance_amount: total * 0.4,
-      status: 'draft',
+      consultation_id: quoteForm.consultation_id, client_id: quoteForm.client_id || null,
+      services: quoteForm.services, description: quoteForm.description,
+      total_amount: total, deposit_amount: total * 0.6, balance_amount: total * 0.4, status: 'draft',
     }])
     if (error) { alert('Error: ' + error.message); return }
-    setShowModal('')
-    setQuoteForm(null)
-    fetchAll()
-    setTab('quotes')
+    setShowModal(''); setQuoteForm(null); fetchAll(); setTab('quotes')
   }
 
   const downloadQuotePDF = (quote: any) => {
     const doc = new jsPDF()
-    doc.setFontSize(20)
-    doc.setTextColor(13, 33, 68)
+    doc.setFontSize(20); doc.setTextColor(13, 33, 68)
     doc.text('PRECISION POST CLEANING CO.', 20, 20)
-    doc.setFontSize(10)
-    doc.setTextColor(138, 149, 163)
+    doc.setFontSize(10); doc.setTextColor(138, 149, 163)
     doc.text('precisionpostcleaningco.com | Built Rough. Finished Right.', 20, 28)
-    doc.setFontSize(16)
-    doc.setTextColor(13, 33, 68)
+    doc.setFontSize(16); doc.setTextColor(13, 33, 68)
     doc.text('QUOTE', 170, 20)
-    doc.setFontSize(10)
-    doc.setTextColor(138, 149, 163)
+    doc.setFontSize(10); doc.setTextColor(138, 149, 163)
     doc.text(new Date().toLocaleDateString(), 170, 28)
-    doc.setDrawColor(214, 220, 230)
-    doc.line(20, 33, 190, 33)
-    doc.setFontSize(11)
-    doc.setTextColor(138, 149, 163)
+    doc.setDrawColor(214, 220, 230); doc.line(20, 33, 190, 33)
+    doc.setFontSize(11); doc.setTextColor(138, 149, 163)
     doc.text('Prepared for:', 20, 42)
-    doc.setFontSize(13)
-    doc.setTextColor(26, 37, 53)
+    doc.setFontSize(13); doc.setTextColor(26, 37, 53)
     doc.text(quote.clients?.profiles?.full_name || 'Client', 20, 50)
-    if (quote.clients?.profiles?.email) {
-      doc.setFontSize(10)
-      doc.setTextColor(138, 149, 163)
-      doc.text(quote.clients.profiles.email, 20, 57)
-    }
-    doc.setFontSize(11)
-    doc.setTextColor(13, 33, 68)
-    doc.text('Services:', 20, 70)
-    doc.setFontSize(10)
-    doc.setTextColor(26, 37, 53)
-    doc.text(quote.services || '', 20, 78)
-    if (quote.description) {
-      doc.setFontSize(10)
-      doc.setTextColor(138, 149, 163)
-      doc.text(quote.description, 20, 86, { maxWidth: 170 })
-    }
+    if (quote.clients?.profiles?.email) { doc.setFontSize(10); doc.setTextColor(138, 149, 163); doc.text(quote.clients.profiles.email, 20, 57) }
+    doc.setFontSize(11); doc.setTextColor(13, 33, 68); doc.text('Services:', 20, 70)
+    doc.setFontSize(10); doc.setTextColor(26, 37, 53); doc.text(quote.services || '', 20, 78)
+    if (quote.description) { doc.setFontSize(10); doc.setTextColor(138, 149, 163); doc.text(quote.description, 20, 86, { maxWidth: 170 }) }
     doc.line(20, 105, 190, 105)
-    doc.setFontSize(12)
-    doc.setTextColor(13, 33, 68)
-    doc.text('Payment Schedule', 20, 115)
-    ;(doc as any).autoTable({
+    doc.setFontSize(12); doc.setTextColor(13, 33, 68); doc.text('Payment Schedule', 20, 115)
+    autoTable(doc, {
       startY: 121,
       head: [['Description', 'Amount']],
       body: [
@@ -246,8 +466,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
       columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
       styles: { fontSize: 11 },
     })
-    doc.setFontSize(10)
-    doc.setTextColor(138, 149, 163)
+    doc.setFontSize(10); doc.setTextColor(138, 149, 163)
     doc.text('This quote is valid for 30 days from the date issued.', 20, 220)
     doc.text('Thank you for choosing Precision Post Cleaning Co.', 20, 228)
     doc.save(`PrecisionPost-Quote-${quote.clients?.profiles?.full_name || 'Client'}.pdf`)
@@ -257,26 +476,15 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     try {
       const doc = new jsPDF()
       const clientName = inv.clients?.profiles?.full_name || 'Client'
-      doc.setFontSize(20)
-      doc.setTextColor(13, 33, 68)
+      doc.setFontSize(20); doc.setTextColor(13, 33, 68)
       doc.text('PRECISION POST CLEANING CO.', 20, 20)
-      doc.setFontSize(10)
-      doc.setTextColor(138, 149, 163)
+      doc.setFontSize(10); doc.setTextColor(138, 149, 163)
       doc.text('precisionpostcleaningco.com | Built Rough. Finished Right.', 20, 28)
-      doc.setFontSize(16)
-      doc.setTextColor(13, 33, 68)
-      doc.text('INVOICE', 170, 20)
-      doc.setFontSize(10)
-      doc.setTextColor(138, 149, 163)
-      doc.text(new Date().toLocaleDateString(), 170, 28)
-      doc.setDrawColor(214, 220, 230)
-      doc.line(20, 33, 190, 33)
-      doc.setFontSize(11)
-      doc.setTextColor(138, 149, 163)
-      doc.text('Bill To:', 20, 42)
-      doc.setFontSize(13)
-      doc.setTextColor(26, 37, 53)
-      doc.text(clientName, 20, 50)
+      doc.setFontSize(16); doc.setTextColor(13, 33, 68); doc.text('INVOICE', 170, 20)
+      doc.setFontSize(10); doc.setTextColor(138, 149, 163); doc.text(new Date().toLocaleDateString(), 170, 28)
+      doc.setDrawColor(214, 220, 230); doc.line(20, 33, 190, 33)
+      doc.setFontSize(11); doc.setTextColor(138, 149, 163); doc.text('Bill To:', 20, 42)
+      doc.setFontSize(13); doc.setTextColor(26, 37, 53); doc.text(clientName, 20, 50)
       doc.line(20, 60, 190, 60)
       autoTable(doc, {
         startY: 66,
@@ -291,36 +499,24 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
         styles: { fontSize: 11 },
       })
-      doc.setFontSize(10)
-      doc.setTextColor(138, 149, 163)
+      doc.setFontSize(10); doc.setTextColor(138, 149, 163)
       doc.text(`Due Date: ${inv.due_date || 'Upon receipt'}`, 20, 160)
       if (inv.notes) doc.text(`Notes: ${inv.notes}`, 20, 168)
       doc.text('Thank you for choosing Precision Post Cleaning Co.', 20, 200)
       doc.save(`PrecisionPost-Invoice-${clientName}.pdf`)
-    } catch (err) {
-      alert('PDF error: ' + err)
-    }
+    } catch (err) { alert('PDF error: ' + err) }
   }
 
-
   const updateQuoteStatus = async (id: string, status: string) => {
-    await supabase.from('quotes').update({ status }).eq('id', id)
-    fetchAll()
+    await supabase.from('quotes').update({ status }).eq('id', id); fetchAll()
   }
 
   const markDepositPaid = async (id: string, method: string) => {
-    await supabase.from('quotes').update({
-      deposit_paid: true,
-      deposit_paid_at: new Date().toISOString(),
-      deposit_payment_method: method,
-      status: 'accepted'
-    }).eq('id', id)
-    fetchAll()
+    await supabase.from('quotes').update({ deposit_paid: true, deposit_paid_at: new Date().toISOString(), deposit_payment_method: method, status: 'accepted' }).eq('id', id); fetchAll()
   }
 
   const updateJobStatus = async (id: string, status: string) => {
-    await supabase.from('jobs').update({ status }).eq('id', id)
-    fetchAll()
+    await supabase.from('jobs').update({ status }).eq('id', id); fetchAll()
   }
 
   const assignCleaner = async () => {
@@ -328,55 +524,41 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     const existing = jobCleaners.find(jc => jc.job_id === selectedJob.id && jc.cleaner_id === selectedCleaner)
     if (existing) { setShowModal(''); return }
     await supabase.from('job_cleaners').insert([{ job_id: selectedJob.id, cleaner_id: selectedCleaner }])
-    setShowModal('')
-    setSelectedCleaner('')
-    fetchAll()
+    setShowModal(''); setSelectedCleaner(''); fetchAll()
   }
 
   const removeCleanerFromJob = async (jobCleanerId: string) => {
-    await supabase.from('job_cleaners').delete().eq('id', jobCleanerId)
-    fetchAll()
+    await supabase.from('job_cleaners').delete().eq('id', jobCleanerId); fetchAll()
   }
 
   const updateCleanerStatus = async (cleanerId: string, status: string) => {
-    await supabase.from('cleaners').update({ status }).eq('id', cleanerId)
-    setConfirmAction(null)
-    fetchAll()
+    await supabase.from('cleaners').update({ status }).eq('id', cleanerId); setConfirmAction(null); fetchAll()
   }
 
   const addService = async () => {
     if (!newService.name) return
     await supabase.from('services').insert([{ ...newService, base_price: Number(newService.base_price), is_addon: false }])
-    setNewService({ name: '', description: '', base_price: '' })
-    setShowModal('')
-    fetchAll()
+    setNewService({ name: '', description: '', base_price: '' }); setShowModal(''); fetchAll()
   }
 
   const addAddon = async () => {
     if (!newAddon.name) return
     await supabase.from('services').insert([{ name: newAddon.name, base_price: Number(newAddon.price), is_addon: true, description: 'Add-on service' }])
-    setNewAddon({ name: '', price: '' })
-    setShowModal('')
-    fetchAll()
+    setNewAddon({ name: '', price: '' }); setShowModal(''); fetchAll()
   }
 
   const addJob = async () => {
     if (!newJob.title || !newJob.scheduled_date) return
-    const addonCost = newJob.selected_addons.reduce((sum, id) => {
-      const addon = addons.find((a: any) => a.id === id)
-      return sum + (addon?.base_price || 0)
-    }, 0)
+    const addonCost = newJob.selected_addons.reduce((sum, id) => { const addon = addons.find((a: any) => a.id === id); return sum + (addon?.base_price || 0) }, 0)
     await supabase.from('jobs').insert([{
       title: newJob.title, type: newJob.type, address: newJob.address,
       scheduled_date: newJob.scheduled_date, scheduled_time: newJob.scheduled_time,
       price: Number(newJob.price) + addonCost, access_notes: newJob.access_notes,
-      client_id: newJob.client_id || null, status: 'scheduled',
-      recurring: newJob.recurring || null,
+      client_id: newJob.client_id || null, status: 'scheduled', recurring: newJob.recurring || null,
       notes: newJob.selected_addons.length > 0 ? `Add-ons: ${newJob.selected_addons.map(id => addons.find((a: any) => a.id === id)?.name).join(', ')}` : '',
     }])
     setNewJob({ title: '', type: 'Post-Construction', address: '', scheduled_date: '', scheduled_time: '', price: '', access_notes: '', client_id: '', days: '', end_date: '', recurring: '', selected_addons: [] })
-    setShowModal('')
-    fetchAll()
+    setShowModal(''); fetchAll()
   }
 
   const openInvoiceModal = async (job: any) => {
@@ -384,54 +566,28 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
     if (existing) {
       const client = clients.find(c => c.id === existing.client_id)
       setInvoiceForm({ ...existing, job_title: job.title, client_name: client?.profiles?.full_name || existing.clients?.profiles?.full_name || 'No client', editing: true })
-      setShowModal('invoice')
-      return
+      setShowModal('invoice'); return
     }
     const invNum = `INV-${String(invoices.length + 1).padStart(3, '0')}`
     const client = clients.find(c => c.id === job.client_id)
-    setInvoiceForm({
-      job_id: job.id, job_title: job.title,
-      client_name: client?.profiles?.full_name || 'No client assigned',
-      client_id: job.client_id || null,
-      amount: job.price || 0,
-      invoice_number: invNum,
-      due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      notes: '', payment_method: '', editing: false,
-    })
+    setInvoiceForm({ job_id: job.id, job_title: job.title, client_name: client?.profiles?.full_name || 'No client assigned', client_id: job.client_id || null, amount: job.price || 0, invoice_number: invNum, due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], notes: '', payment_method: '', editing: false })
     setShowModal('invoice')
   }
 
   const saveInvoice = async () => {
     if (!invoiceForm) return
     if (invoiceForm.editing) {
-      const { error } = await supabase.from('invoices').update({
-        amount: Number(invoiceForm.amount),
-        due_date: invoiceForm.due_date,
-        notes: invoiceForm.notes || '',
-        payment_method: invoiceForm.payment_method || null,
-      }).eq('id', invoiceForm.id)
+      const { error } = await supabase.from('invoices').update({ amount: Number(invoiceForm.amount), due_date: invoiceForm.due_date, notes: invoiceForm.notes || '', payment_method: invoiceForm.payment_method || null }).eq('id', invoiceForm.id)
       if (error) { alert('Error: ' + error.message); return }
     } else {
-      const { error } = await supabase.from('invoices').insert([{
-        job_id: invoiceForm.job_id,
-        client_id: invoiceForm.client_id || null,
-        amount: Number(invoiceForm.amount),
-        status: 'pending',
-        due_date: invoiceForm.due_date,
-        notes: invoiceForm.notes || '',
-        invoice_number: invoiceForm.invoice_number,
-      }])
+      const { error } = await supabase.from('invoices').insert([{ job_id: invoiceForm.job_id, client_id: invoiceForm.client_id || null, amount: Number(invoiceForm.amount), status: 'pending', due_date: invoiceForm.due_date, notes: invoiceForm.notes || '', invoice_number: invoiceForm.invoice_number }])
       if (error) { alert('Error: ' + error.message); return }
     }
-    setShowModal('')
-    setInvoiceForm(null)
-    fetchAll()
-    setTab('invoices')
+    setShowModal(''); setInvoiceForm(null); fetchAll(); setTab('invoices')
   }
 
   const markInvoicePaid = async (id: string, method: string) => {
-    await supabase.from('invoices').update({ status: 'paid', payment_method: method, paid_at: new Date().toISOString() }).eq('id', id)
-    fetchAll()
+    await supabase.from('invoices').update({ status: 'paid', payment_method: method, paid_at: new Date().toISOString() }).eq('id', id); fetchAll()
   }
 
   const signOut = async () => { await supabase.auth.signOut() }
@@ -444,14 +600,11 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
   const newConsultations = consultations.filter(c => c.status === 'new').length
   const totalOutstanding = invoices.filter(i => i.status === 'pending').reduce((a, b) => a + (b.amount || 0), 0)
   const todayJobs = jobs.filter(j => j.scheduled_date === new Date().toISOString().split('T')[0])
-  const calcResult = calcJobCost && calcWorkers ? {
-    workerPool: Number(calcJobCost) * 0.4,
-    perWorker: (Number(calcJobCost) * 0.4) / Number(calcWorkers),
-    business: Number(calcJobCost) * 0.6
-  } : null
+  const calcResult = calcJobCost && calcWorkers ? { workerPool: Number(calcJobCost) * 0.4, perWorker: (Number(calcJobCost) * 0.4) / Number(calcWorkers), business: Number(calcJobCost) * 0.6 } : null
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.offWhite, fontFamily: "'Barlow', sans-serif" }}>
+      {/* Sidebar */}
       <div style={{ width: 220, background: C.navy, display: 'flex', flexDirection: 'column' as const, flexShrink: 0, position: 'sticky' as const, top: 0, height: '100vh' }}>
         <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <img src="https://i.imgur.com/9UVzMKd.png" alt="Precision Post" style={{ height: 36, objectFit: 'contain' as const }} />
@@ -459,17 +612,8 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
         </div>
         <div style={{ padding: '12px 8px', flex: 1, overflowY: 'auto' as const }}>
           {NAV.map(n => (
-            <button key={n.id} onClick={() => setTab(n.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-              padding: '9px 12px', borderRadius: 7, marginBottom: 2,
-              background: tab === n.id ? 'rgba(200,16,46,0.20)' : 'transparent',
-              border: tab === n.id ? '1px solid rgba(200,16,46,0.35)' : '1px solid transparent',
-              color: tab === n.id ? C.white : 'rgba(255,255,255,0.55)',
-              fontWeight: tab === n.id ? 700 : 500, fontSize: 13, cursor: 'pointer',
-              fontFamily: 'inherit', textAlign: 'left' as const
-            }}>
-              <span>{n.icon}</span>
-              <span>{n.label}</span>
+            <button key={n.id} onClick={() => setTab(n.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', borderRadius: 7, marginBottom: 2, background: tab === n.id ? 'rgba(200,16,46,0.20)' : 'transparent', border: tab === n.id ? '1px solid rgba(200,16,46,0.35)' : '1px solid transparent', color: tab === n.id ? C.white : 'rgba(255,255,255,0.55)', fontWeight: tab === n.id ? 700 : 500, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}>
+              <span>{n.icon}</span><span>{n.label}</span>
               {n.id === 'consultations' && newConsultations > 0 && <span style={{ marginLeft: 'auto', background: C.red, color: C.white, fontSize: 10, fontWeight: 800, borderRadius: 10, padding: '1px 7px' }}>{newConsultations}</span>}
             </button>
           ))}
@@ -618,11 +762,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 10, marginBottom: 12 }}>
                     <div>
                       <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>{job.title}</div>
-                      <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>
-                        📅 {job.scheduled_date} {job.scheduled_time && `· ${job.scheduled_time}`}
-                        {job.end_date && ` → ${job.end_date}`}
-                        {job.days && ` · ${job.days} day(s)`}
-                      </div>
+                      <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>📅 {job.scheduled_date} {job.scheduled_time && `· ${job.scheduled_time}`}{job.end_date && ` → ${job.end_date}`}{job.days && ` · ${job.days} day(s)`}</div>
                       <div style={{ color: C.midGray, fontSize: 12 }}>📍 {job.address}</div>
                       {job.recurring && <div style={{ color: C.navy, fontSize: 12, marginTop: 2 }}>🔄 {job.recurring}</div>}
                       {job.access_notes && <div style={{ color: C.red, fontSize: 12, marginTop: 2 }}>🔑 {job.access_notes}</div>}
@@ -635,9 +775,7 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                     </div>
                   </div>
                   <div style={{ background: C.offWhite, borderRadius: 8, padding: '10px 14px', marginBottom: 10 }}>
-                    <div style={{ color: C.navy, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>
-                      Assigned Cleaners · Worker Pool: ${workerPool.toFixed(2)} (40%) · ${perWorker} each
-                    </div>
+                    <div style={{ color: C.navy, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>Assigned Cleaners · Worker Pool: ${workerPool.toFixed(2)} (40%) · ${perWorker} each</div>
                     {assigned.length === 0 && <div style={{ color: C.midGray, fontSize: 12 }}>No cleaners assigned yet</div>}
                     {assigned.map(jc => (
                       <div key={jc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -701,18 +839,16 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                     <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>📞 {c.profiles?.phone}</div>
                     <div style={{ color: C.midGray, fontSize: 12 }}>✉️ {c.profiles?.email}</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 14, marginBottom: 14 }}>
-                      <div style={{ textAlign: 'center' as const }}>
-                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>{cleanerJobs.length}</div>
-                        <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>Jobs</div>
-                      </div>
-                      <div style={{ textAlign: 'center' as const }}>
-                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>{totalHours}h</div>
-                        <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>Hours</div>
-                      </div>
-                      <div style={{ textAlign: 'center' as const }}>
-                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>⭐{c.rating || 5.0}</div>
-                        <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>Rating</div>
-                      </div>
+                      {[
+                        { label: 'Jobs', val: cleanerJobs.length },
+                        { label: 'Hours', val: `${totalHours}h` },
+                        { label: 'Rating', val: `⭐${c.rating || 5.0}` },
+                      ].map(s => (
+                        <div key={s.label} style={{ textAlign: 'center' as const }}>
+                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: C.navy }}>{s.val}</div>
+                          <div style={{ color: C.midGray, fontSize: 10, textTransform: 'uppercase' as const }}>{s.label}</div>
+                        </div>
+                      ))}
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
                       {c.status !== 'active' && <Btn onClick={() => setConfirmAction({ type: 'activate', cleaner: c })} style={{ padding: '6px 14px', fontSize: 11 }}>Activate</Btn>}
@@ -752,9 +888,10 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                     <div style={{ color: C.midGray, fontSize: 12, marginTop: 2 }}>Due: {inv.due_date}</div>
                     {inv.status === 'paid' && inv.paid_at && <div style={{ color: '#109648', fontSize: 12 }}>✅ Paid {new Date(inv.paid_at).toLocaleDateString()} via {inv.payment_method}</div>}
                     {inv.notes && <div style={{ color: C.darkGray, fontSize: 12, marginTop: 2 }}>📝 {inv.notes}</div>}
-                  
-                    <button onClick={() => downloadInvoicePDF(inv)} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, marginTop: 6, fontFamily: 'inherit', textDecoration: 'underline' }}>📥 Download PDF</button>
-                   <button onClick={() => { setInvoiceForm({ ...inv, job_title: 'Invoice', client_name: inv.clients?.profiles?.full_name || 'Client', editing: true }); setShowModal('invoice') }} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, marginTop: 6, fontFamily: 'inherit', textDecoration: 'underline' }}>✏️ Edit Invoice</button>
+                    <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+                      <button onClick={() => downloadInvoicePDF(inv)} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, fontFamily: 'inherit', textDecoration: 'underline' }}>📥 Download PDF</button>
+                      <button onClick={() => { setInvoiceForm({ ...inv, job_title: 'Invoice', client_name: inv.clients?.profiles?.full_name || 'Client', editing: true }); setShowModal('invoice') }} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, fontFamily: 'inherit', textDecoration: 'underline' }}>✏️ Edit</button>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' as const }}>
                     <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, color: C.navy, fontSize: 18 }}>${inv.amount}</span>
@@ -826,60 +963,48 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
                     const pay = (job.price * 0.4) / count
                     const hours = calcHours(jc.clock_in, jc.clock_out)
                     return (
-                      <div key={jc.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: `1px solid ${C.lightGray}`, fontSize: 13 }}>
+                      <div key={jc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: `1px solid ${C.lightGray}`, fontSize: 13 }}>
                         <span style={{ color: C.text }}>{job.title}</span>
-<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-  <span style={{ color: C.midGray }}>{hours}h · <strong style={{ color: C.navy }}>${pay.toFixed(2)}</strong></span>
-  <button onClick={() => {
-    const doc = new jsPDF()
-    doc.setFontSize(20)
-    doc.setTextColor(13, 33, 68)
-    doc.text('PRECISION POST CLEANING CO.', 20, 20)
-    doc.setFontSize(10)
-    doc.setTextColor(138, 149, 163)
-    doc.text('precisionpostcleaningco.com | Built Rough. Finished Right.', 20, 28)
-    doc.setFontSize(16)
-    doc.setTextColor(13, 33, 68)
-    doc.text('PAY STUB', 160, 20)
-    doc.setFontSize(10)
-    doc.setTextColor(138, 149, 163)
-    doc.text(new Date().toLocaleDateString(), 160, 28)
-    doc.setDrawColor(214, 220, 230)
-    doc.line(20, 33, 190, 33)
-    doc.setFontSize(12)
-    doc.setTextColor(13, 33, 68)
-    doc.text('Employee:', 20, 45)
-    doc.setFontSize(14)
-    doc.setTextColor(26, 37, 53)
-    doc.text(cleaner.profiles?.full_name || '', 20, 53)
-    autoTable(doc, {
-      startY: 65,
-      head: [['Job', 'Date', 'Hours', 'Pay']],
-      body: [[
-        job.title,
-        job.scheduled_date || '',
-        `${hours}h`,
-        `$${pay.toFixed(2)}`
-      ]],
-      headStyles: { fillColor: [13, 33, 68], textColor: 255, fontStyle: 'bold' },
-      bodyStyles: { textColor: [26, 37, 53] },
-      alternateRowStyles: { fillColor: [244, 246, 249] },
-      styles: { fontSize: 11 },
-    })
-    doc.setFontSize(10)
-    doc.setTextColor(138, 149, 163)
-    doc.text('Thank you for your hard work!', 20, 130)
-    doc.text('Built Rough. Finished Right.', 20, 138)
-    doc.save(`PayStub-${cleaner.profiles?.full_name}-${job.title}.pdf`)
-  }} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>📥 Pay Stub</button>
-</div>
-
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ color: C.midGray }}>{hours}h · <strong style={{ color: C.navy }}>${pay.toFixed(2)}</strong></span>
+                          <button onClick={() => {
+                            const doc = new jsPDF()
+                            doc.setFontSize(20); doc.setTextColor(13, 33, 68)
+                            doc.text('PRECISION POST CLEANING CO.', 20, 20)
+                            doc.setFontSize(10); doc.setTextColor(138, 149, 163)
+                            doc.text('precisionpostcleaningco.com | Built Rough. Finished Right.', 20, 28)
+                            doc.setFontSize(16); doc.setTextColor(13, 33, 68); doc.text('PAY STUB', 160, 20)
+                            doc.setFontSize(10); doc.setTextColor(138, 149, 163); doc.text(new Date().toLocaleDateString(), 160, 28)
+                            doc.setDrawColor(214, 220, 230); doc.line(20, 33, 190, 33)
+                            doc.setFontSize(12); doc.setTextColor(13, 33, 68); doc.text('Employee:', 20, 45)
+                            doc.setFontSize(14); doc.setTextColor(26, 37, 53); doc.text(cleaner.profiles?.full_name || '', 20, 53)
+                            autoTable(doc, {
+                              startY: 65,
+                              head: [['Job', 'Date', 'Hours', 'Pay']],
+                              body: [[job.title, job.scheduled_date || '', `${hours}h`, `$${pay.toFixed(2)}`]],
+                              headStyles: { fillColor: [13, 33, 68], textColor: 255, fontStyle: 'bold' },
+                              bodyStyles: { textColor: [26, 37, 53] },
+                              alternateRowStyles: { fillColor: [244, 246, 249] },
+                              styles: { fontSize: 11 },
+                            })
+                            doc.setFontSize(10); doc.setTextColor(138, 149, 163)
+                            doc.text('Thank you for your hard work!', 20, 130)
+                            doc.save(`PayStub-${cleaner.profiles?.full_name}-${job.title}.pdf`)
+                          }} style={{ background: 'none', border: 'none', color: C.navy, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>📥 Pay Stub</button>
+                        </div>
                       </div>
                     )
                   })}
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {tab === 'calculator' && (
+          <div>
+            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Job Price Calculator</div>
+            <CalculatorTab />
           </div>
         )}
 
@@ -966,313 +1091,6 @@ export default function OwnerDashboard({ profile }: { profile: any }) {
           </div>
         )}
       </div>
-{tab === 'calculator' && (
-  <div>
-    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy, textTransform: 'uppercase' as const, marginBottom: 20 }}>Job Price Calculator</div>
-
-    {(() => {
-      const [serviceType, setServiceType] = React.useState('pc_commercial')
-      const [sqft, setSqft] = React.useState('')
-      const [bathrooms, setBathrooms] = React.useState(0)
-      const [kitchens, setKitchens] = React.useState(0)
-      const [lobbies, setLobbies] = React.useState(0)
-      const [garages, setGarages] = React.useState(0)
-      const [windows, setWindows] = React.useState(0)
-      const [carpetSqft, setCarpetSqft] = React.useState('')
-      const [frequency, setFrequency] = React.useState('monthly')
-      const [numCleaners, setNumCleaners] = React.useState(2)
-      const [includeDebris, setIncludeDebris] = React.useState(false)
-      const [includeWax, setIncludeWax] = React.useState(false)
-      const [includeCarpet, setIncludeCarpet] = React.useState(false)
-      const [includeWindows, setIncludeWindows] = React.useState(false)
-      const [includeCeiling, setIncludeCeiling] = React.useState(false)
-
-      const isPostConstruction = serviceType === 'pc_commercial' || serviceType === 'pc_residential'
-      const isCommercial = serviceType === 'commercial_regular' || serviceType === 'commercial_deep'
-
-      const calculate = () => {
-        const sf = Number(sqft) || 0
-        if (sf === 0) return null
-
-        let baseRate = 0
-        let bathroomRate = 0
-        let kitchenRate = 0
-        let lobbyRate = 0
-        let garageRate = 0
-        let minimum = 0
-
-        if (serviceType === 'pc_commercial') { baseRate = 0.50; bathroomRate = 100; kitchenRate = 120; lobbyRate = 100; minimum = 750 }
-        if (serviceType === 'pc_residential') { baseRate = 0.40; bathroomRate = 85; kitchenRate = 100; garageRate = 75; minimum = 500 }
-        if (serviceType === 'commercial_regular') { baseRate = 0.12; bathroomRate = 50; kitchenRate = 65; minimum = 300 }
-        if (serviceType === 'commercial_deep') { baseRate = 0.30; bathroomRate = 75; kitchenRate = 90; minimum = 500 }
-
-        let base = sf * baseRate
-        let rooms = (bathrooms * bathroomRate) + (kitchens * kitchenRate) + (lobbies * lobbyRate) + (garages * garageRate)
-        let addons = 0
-        if (includeDebris) addons += 125
-        if (includeWax) addons += sf * 0.15
-        if (includeCarpet) addons += Number(carpetSqft) * 0.20
-        if (includeWindows) addons += windows * 8
-        if (includeCeiling) addons += sf * 0.10
-
-        let subtotal = Math.max(base + rooms + addons, minimum)
-
-        let discount = 0
-        if (isCommercial) {
-          if (frequency === 'weekly') discount = subtotal * 0.15
-          if (frequency === 'biweekly') discount = subtotal * 0.10
-        }
-
-        let total = subtotal - discount
-        let deposit = total * 0.6
-        let balance = total * 0.4
-        let workerPool = total * 0.4
-        let perCleaner = workerPool / numCleaners
-
-        // Time estimates
-        let hoursPerCleaner = sf / 250
-        if (serviceType === 'commercial_regular') hoursPerCleaner = sf / 350
-
-        return { base, rooms, addons, subtotal, discount, total, deposit, balance, workerPool, perCleaner, hoursPerCleaner }
-      }
-
-      const result = calculate()
-
-      return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          {/* LEFT — Inputs */}
-          <div>
-            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
-              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Service Type</div>
-              {[
-                { id: 'pc_commercial', label: 'Post-Construction Commercial' },
-                { id: 'pc_residential', label: 'Post-Construction Residential' },
-                { id: 'commercial_regular', label: 'Commercial Regular Clean' },
-                { id: 'commercial_deep', label: 'Commercial Deep Clean' },
-              ].map(s => (
-                <div key={s.id} onClick={() => setServiceType(s.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: serviceType === s.id ? 'rgba(13,33,68,0.08)' : 'transparent', border: `1px solid ${serviceType === s.id ? C.navy : C.border}` }}>
-                  <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${serviceType === s.id ? C.navy : C.border}`, background: serviceType === s.id ? C.navy : 'transparent', flexShrink: 0 }} />
-                  <span style={{ color: C.text, fontSize: 13, fontWeight: serviceType === s.id ? 700 : 400 }}>{s.label}</span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
-              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Space Details</div>
-              <Input label="Total Square Footage" type="number" value={sqft} onChange={(e: any) => setSqft(e.target.value)} placeholder="e.g. 3000" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Bathrooms</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button onClick={() => setBathrooms(Math.max(0, bathrooms - 1))} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>-</button>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{bathrooms}</span>
-                    <button onClick={() => setBathrooms(bathrooms + 1)} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
-                  </div>
-                </div>
-                <div>
-                  <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Kitchens</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button onClick={() => setKitchens(Math.max(0, kitchens - 1))} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>-</button>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{kitchens}</span>
-                    <button onClick={() => setKitchens(kitchens + 1)} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
-                  </div>
-                </div>
-                {serviceType === 'pc_commercial' && (
-                  <div>
-                    <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Lobbies</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <button onClick={() => setLobbies(Math.max(0, lobbies - 1))} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>-</button>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{lobbies}</span>
-                      <button onClick={() => setLobbies(lobbies + 1)} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
-                    </div>
-                  </div>
-                )}
-                {serviceType === 'pc_residential' && (
-                  <div>
-                    <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Garages</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <button onClick={() => setGarages(Math.max(0, garages - 1))} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>-</button>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{garages}</span>
-                      <button onClick={() => setGarages(garages + 1)} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {isCommercial && (
-              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
-                <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Frequency</div>
-                {[
-                  { id: 'monthly', label: 'Monthly — Full Price' },
-                  { id: 'biweekly', label: 'Bi-Weekly — 10% Off' },
-                  { id: 'weekly', label: 'Weekly — 15% Off' },
-                ].map(f => (
-                  <div key={f.id} onClick={() => setFrequency(f.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: frequency === f.id ? 'rgba(13,33,68,0.08)' : 'transparent', border: `1px solid ${frequency === f.id ? C.navy : C.border}` }}>
-                    <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${frequency === f.id ? C.navy : C.border}`, background: frequency === f.id ? C.navy : 'transparent', flexShrink: 0 }} />
-                    <span style={{ color: C.text, fontSize: 13, fontWeight: frequency === f.id ? 700 : 400 }}>{f.label}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
-              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Add-Ons</div>
-              {[
-                { key: 'debris', label: 'Debris Removal', desc: '$125 flat', checked: includeDebris, set: setIncludeDebris },
-                { key: 'wax', label: 'Floor Waxing & Buffing', desc: '$0.15/sq ft', checked: includeWax, set: setIncludeWax },
-                { key: 'ceiling', label: 'High-Dust/Ceiling Clean', desc: '$0.10/sq ft', checked: includeCeiling, set: setIncludeCeiling },
-              ].map(a => (
-                <div key={a.key} onClick={() => a.set(!a.checked)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: a.checked ? 'rgba(200,16,46,0.06)' : 'transparent', border: `1px solid ${a.checked ? C.red : C.border}` }}>
-                  <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${a.checked ? C.red : C.border}`, background: a.checked ? C.red : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {a.checked && <span style={{ color: C.white, fontSize: 11, fontWeight: 800 }}>✓</span>}
-                  </div>
-                  <div>
-                    <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>{a.label}</div>
-                    <div style={{ color: C.midGray, fontSize: 11 }}>{a.desc}</div>
-                  </div>
-                </div>
-              ))}
-              <div onClick={() => setIncludeWindows(!includeWindows)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: includeWindows ? 'rgba(200,16,46,0.06)' : 'transparent', border: `1px solid ${includeWindows ? C.red : C.border}` }}>
-                <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeWindows ? C.red : C.border}`, background: includeWindows ? C.red : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {includeWindows && <span style={{ color: C.white, fontSize: 11, fontWeight: 800 }}>✓</span>}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>Window Cleaning</div>
-                  <div style={{ color: C.midGray, fontSize: 11 }}>$8 per window</div>
-                </div>
-              </div>
-              {includeWindows && (
-                <div style={{ paddingLeft: 28, marginBottom: 6 }}>
-                  <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Number of Windows</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button onClick={() => setWindows(Math.max(0, windows - 1))} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>-</button>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, color: C.navy, minWidth: 30, textAlign: 'center' as const }}>{windows}</span>
-                    <button onClick={() => setWindows(windows + 1)} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
-                  </div>
-                </div>
-              )}
-              <div onClick={() => setIncludeCarpet(!includeCarpet)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: includeCarpet ? 'rgba(200,16,46,0.06)' : 'transparent', border: `1px solid ${includeCarpet ? C.red : C.border}` }}>
-                <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeCarpet ? C.red : C.border}`, background: includeCarpet ? C.red : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {includeCarpet && <span style={{ color: C.white, fontSize: 11, fontWeight: 800 }}>✓</span>}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>Carpet Steam Cleaning</div>
-                  <div style={{ color: C.midGray, fontSize: 11 }}>$0.20 per sq ft of carpet</div>
-                </div>
-              </div>
-              {includeCarpet && (
-                <div style={{ paddingLeft: 28, marginBottom: 6 }}>
-                  <Input label="Carpet Square Footage" type="number" value={carpetSqft} onChange={(e: any) => setCarpetSqft(e.target.value)} placeholder="e.g. 1000" />
-                </div>
-              )}
-            </div>
-
-            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
-              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Crew</div>
-              <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8 }}>Number of Cleaners</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <button onClick={() => setNumCleaners(Math.max(1, numCleaners - 1))} style={{ width: 36, height: 36, borderRadius: 8, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 18, fontWeight: 700 }}>-</button>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 800, color: C.navy, minWidth: 40, textAlign: 'center' as const }}>{numCleaners}</span>
-                <button onClick={() => setNumCleaners(numCleaners + 1)} style={{ width: 36, height: 36, borderRadius: 8, border: `1px solid ${C.border}`, background: C.offWhite, cursor: 'pointer', fontSize: 18, fontWeight: 700 }}>+</button>
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT — Results */}
-          <div>
-            {!result ? (
-              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 32, textAlign: 'center' as const }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>🧮</div>
-                <div style={{ color: C.midGray, fontSize: 14 }}>Enter square footage to see your estimate</div>
-              </div>
-            ) : (
-              <>
-                <div style={{ background: C.navy, borderRadius: 12, padding: 24, marginBottom: 16, color: C.white }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, opacity: 0.6, marginBottom: 8 }}>Total Job Price</div>
-                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 800 }}>${result.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  {result.discount > 0 && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>Includes {frequency === 'weekly' ? '15%' : '10%'} frequency discount (saved ${result.discount.toFixed(2)})</div>}
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                  <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16 }}>
-                    <div style={{ color: C.red, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, marginBottom: 4 }}>60% Deposit</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy }}>${result.deposit.toFixed(2)}</div>
-                    <div style={{ color: C.midGray, fontSize: 11 }}>Due before start</div>
-                  </div>
-                  <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16 }}>
-                    <div style={{ color: C.navy, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, marginBottom: 4 }}>40% Balance</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: C.navy }}>${result.balance.toFixed(2)}</div>
-                    <div style={{ color: C.midGray, fontSize: 11 }}>Due on completion</div>
-                  </div>
-                </div>
-
-                <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
-                  <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Price Breakdown</div>
-                  {[
-                    { label: 'Base (sq ft)', val: result.base },
-                    { label: 'Rooms', val: result.rooms },
-                    { label: 'Add-Ons', val: result.addons },
-                    { label: 'Frequency Discount', val: -result.discount },
-                  ].filter(r => r.val !== 0).map(r => (
-                    <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${C.lightGray}`, fontSize: 13 }}>
-                      <span style={{ color: C.darkGray }}>{r.label}</span>
-                      <span style={{ color: r.val < 0 ? '#109648' : C.navy, fontWeight: 600 }}>{r.val < 0 ? '-' : ''}${Math.abs(r.val).toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
-                  <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Crew Pay (40% Pool)</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ color: C.darkGray, fontSize: 13 }}>Total Worker Pool</span>
-                    <span style={{ color: C.navy, fontWeight: 700 }}>${result.workerPool.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ color: C.darkGray, fontSize: 13 }}>Per Cleaner ({numCleaners} workers)</span>
-                    <span style={{ color: C.red, fontWeight: 700 }}>${result.perCleaner.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: C.darkGray, fontSize: 13 }}>Business Keeps (60%)</span>
-                    <span style={{ color: '#109648', fontWeight: 700 }}>${(result.total * 0.6).toFixed(2)}</span>
-                  </div>
-                </div>
-
-                {isPostConstruction && (
-                  <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
-                    <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>3-Day Schedule Estimate</div>
-                    {[
-                      { day: 'Day 1', stage: 'Stage 1 — Rough Clean', hours: '6-7 hours', desc: 'Debris removal, sweep, basic clean' },
-                      { day: 'Day 2', stage: 'Stage 2 — Final Clean', hours: '8-9 hours', desc: 'Deep detailed clean, windows, fixtures' },
-                      { day: 'Day 3', stage: 'Stage 3 — Touch-Up & Handover', hours: '4-5 hours', desc: 'Final pass, wax floors, hand over to client' },
-                    ].map(d => (
-                      <div key={d.day} style={{ display: 'flex', gap: 12, marginBottom: 12, padding: '10px 12px', background: C.offWhite, borderRadius: 8 }}>
-                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 800, color: C.navy, minWidth: 45 }}>{d.day}</div>
-                        <div>
-                          <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{d.stage}</div>
-                          <div style={{ color: C.red, fontSize: 12, fontWeight: 600 }}>{d.hours} · {numCleaners} cleaners</div>
-                          <div style={{ color: C.midGray, fontSize: 11 }}>{d.desc}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {isCommercial && (
-                  <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
-                    <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Time Estimate</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 800, color: C.navy }}>{(result.hoursPerCleaner / numCleaners).toFixed(1)} hours</div>
-                    <div style={{ color: C.midGray, fontSize: 13 }}>Estimated completion time with {numCleaners} cleaner{numCleaners > 1 ? 's' : ''}</div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )
-    })()}
-  </div>
-)}
 
       {/* Quote Modal */}
       {showModal === 'quote' && quoteForm && (
