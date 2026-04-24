@@ -77,6 +77,7 @@ function CalculatorTab() {
   const [serviceType, setServiceType] = useState('pc_commercial')
   const [sqft, setSqft] = useState('')
   const [bathrooms, setBathrooms] = useState(0)
+  const [halfBathrooms, setHalfBathrooms] = useState(0)
   const [kitchens, setKitchens] = useState(0)
   const [lobbies, setLobbies] = useState(0)
   const [garages, setGarages] = useState(0)
@@ -89,38 +90,64 @@ function CalculatorTab() {
   const [includeCarpet, setIncludeCarpet] = useState(false)
   const [includeWindows, setIncludeWindows] = useState(false)
   const [includeCeiling, setIncludeCeiling] = useState(false)
+  const [extras, setExtras] = useState<{id: number, note: string, cost: string}[]>([])
+  const [inspectionNotes, setInspectionNotes] = useState('')
+  const [editDays, setEditDays] = useState<number | null>(null)
+  const [editHoursPerDay, setEditHoursPerDay] = useState<number | null>(null)
 
   const isPostConstruction = serviceType === 'pc_commercial' || serviceType === 'pc_residential'
   const isCommercial = serviceType === 'commercial_regular' || serviceType === 'commercial_deep'
 
+  const addExtra = () => {
+    setExtras(prev => [...prev, { id: Date.now(), note: '', cost: '' }])
+  }
+
+  const updateExtra = (id: number, field: 'note' | 'cost', value: string) => {
+    setExtras(prev => prev.map(e => e.id === id ? { ...e, [field]: value } : e))
+  }
+
+  const removeExtra = (id: number) => {
+    setExtras(prev => prev.filter(e => e.id !== id))
+  }
+
   const calculate = () => {
     const sf = Number(sqft) || 0
     if (sf === 0) return null
-    let baseRate = 0, bathroomRate = 0, kitchenRate = 0, lobbyRate = 0, garageRate = 0, minimum = 0
-    if (serviceType === 'pc_commercial') { baseRate = 0.50; bathroomRate = 100; kitchenRate = 120; lobbyRate = 100; minimum = 750 }
-    if (serviceType === 'pc_residential') { baseRate = 0.40; bathroomRate = 85; kitchenRate = 100; garageRate = 75; minimum = 500 }
-    if (serviceType === 'commercial_regular') { baseRate = 0.12; bathroomRate = 50; kitchenRate = 65; minimum = 300 }
-    if (serviceType === 'commercial_deep') { baseRate = 0.30; bathroomRate = 75; kitchenRate = 90; minimum = 500 }
+    let baseRate = 0, bathroomRate = 0, halfBathRate = 0, kitchenRate = 0, lobbyRate = 0, garageRate = 0, minimum = 0
+    if (serviceType === 'pc_commercial') { baseRate = 0.50; bathroomRate = 100; halfBathRate = 60; kitchenRate = 120; lobbyRate = 100; minimum = 750 }
+    if (serviceType === 'pc_residential') { baseRate = 0.40; bathroomRate = 85; halfBathRate = 50; kitchenRate = 100; garageRate = 75; minimum = 500 }
+    if (serviceType === 'commercial_regular') { baseRate = 0.12; bathroomRate = 50; halfBathRate = 30; kitchenRate = 65; minimum = 300 }
+    if (serviceType === 'commercial_deep') { baseRate = 0.30; bathroomRate = 75; halfBathRate = 45; kitchenRate = 90; minimum = 500 }
     const base = sf * baseRate
-    const rooms = (bathrooms * bathroomRate) + (kitchens * kitchenRate) + (lobbies * lobbyRate) + (garages * garageRate)
+    const rooms = (bathrooms * bathroomRate) + (halfBathrooms * halfBathRate) + (kitchens * kitchenRate) + (lobbies * lobbyRate) + (garages * garageRate)
     let addons = 0
     if (includeDebris) addons += 125
     if (includeWax) addons += sf * 0.15
     if (includeCarpet) addons += Number(carpetSqft) * 0.20
     if (includeWindows) addons += windows * 8
     if (includeCeiling) addons += sf * 0.10
-    const subtotal = Math.max(base + rooms + addons, minimum)
+    const extrasCost = extras.reduce((sum, e) => sum + (Number(e.cost) || 0), 0)
+    const subtotal = Math.max(base + rooms + addons + extrasCost, minimum)
     let discount = 0
     if (isCommercial) {
       if (frequency === 'weekly') discount = subtotal * 0.15
       if (frequency === 'biweekly') discount = subtotal * 0.10
     }
     const total = subtotal - discount
+
+    // Dynamic schedule calculation
+    const sqftPerCleanerPerHour = serviceType === 'commercial_regular' ? 350 : 250
+    const totalHoursNeeded = sf / sqftPerCleanerPerHour
+    const hoursPerDay = editHoursPerDay || 8
+    const estimatedDays = Math.ceil(totalHoursNeeded / (numCleaners * hoursPerDay))
+    const finalDays = editDays || Math.max(estimatedDays, isPostConstruction ? 3 : 1)
+
     return {
-      base, rooms, addons, subtotal, discount, total,
+      base, rooms, addons, extrasCost, subtotal, discount, total,
       deposit: total * 0.6, balance: total * 0.4,
       workerPool: total * 0.4, perCleaner: (total * 0.4) / numCleaners,
-      hoursPerCleaner: sf / (serviceType === 'commercial_regular' ? 350 : 250)
+      estimatedDays, finalDays, hoursPerDay,
+      totalHours: finalDays * hoursPerDay * numCleaners
     }
   }
 
@@ -131,6 +158,27 @@ function CalculatorTab() {
     background: C.offWhite, cursor: 'pointer', fontSize: 16, fontWeight: 700,
     fontFamily: 'inherit', ...style
   })
+
+  const scheduleStages = (days: number) => {
+    if (days <= 1) return [{ day: 'Day 1', stage: 'Full Clean & Handover', desc: 'All stages completed in one day' }]
+    if (days === 2) return [
+      { day: 'Day 1', stage: 'Stage 1 & 2 — Rough & Final Clean', desc: 'Debris removal, deep clean, windows, fixtures' },
+      { day: 'Day 2', stage: 'Stage 3 — Touch-Up & Handover', desc: 'Final pass, wax floors, hand over to client' },
+    ]
+    if (days === 3) return [
+      { day: 'Day 1', stage: 'Stage 1 — Rough Clean', desc: 'Debris removal, sweep, basic clean' },
+      { day: 'Day 2', stage: 'Stage 2 — Final Clean', desc: 'Deep detailed clean, windows, fixtures' },
+      { day: 'Day 3', stage: 'Stage 3 — Touch-Up & Handover', desc: 'Final pass, wax floors, hand over to client' },
+    ]
+    // 4+ days
+    const stages = []
+    for (let i = 1; i <= days; i++) {
+      if (i === 1) stages.push({ day: `Day ${i}`, stage: 'Stage 1 — Rough Clean', desc: 'Debris removal, sweep, basic clean' })
+      else if (i === days) stages.push({ day: `Day ${i}`, stage: 'Stage 3 — Touch-Up & Handover', desc: 'Final pass, wax floors, hand over to client' })
+      else stages.push({ day: `Day ${i}`, stage: `Stage 2 — Final Clean (Part ${i - 1})`, desc: 'Deep detailed clean continues — windows, fixtures, surfaces' })
+    }
+    return stages
+  }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -154,10 +202,14 @@ function CalculatorTab() {
         {/* Space Details */}
         <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
           <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Space Details</div>
-          <Input label="Total Square Footage" type="number" value={sqft} onChange={(e: any) => setSqft(e.target.value)} placeholder="e.g. 3000" />
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Total Square Footage</label>
+            <input type="number" value={sqft} onChange={(e: any) => setSqft(e.target.value)} placeholder="e.g. 3000" style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '10px 14px', outline: 'none', boxSizing: 'border-box' as const }} />
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {[
-              { label: 'Bathrooms', val: bathrooms, set: setBathrooms },
+              { label: 'Full Bathrooms', val: bathrooms, set: setBathrooms },
+              { label: 'Half Bathrooms', val: halfBathrooms, set: setHalfBathrooms },
               { label: 'Kitchens', val: kitchens, set: setKitchens },
               ...(serviceType === 'pc_commercial' ? [{ label: 'Lobbies', val: lobbies, set: setLobbies }] : []),
               ...(serviceType === 'pc_residential' ? [{ label: 'Garages', val: garages, set: setGarages }] : []),
@@ -239,9 +291,37 @@ function CalculatorTab() {
           </div>
           {includeCarpet && (
             <div style={{ paddingLeft: 28, marginBottom: 6 }}>
-              <Input label="Carpet Square Footage" type="number" value={carpetSqft} onChange={(e: any) => setCarpetSqft(e.target.value)} placeholder="e.g. 1000" />
+              <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Carpet Square Footage</label>
+              <input type="number" value={carpetSqft} onChange={(e: any) => setCarpetSqft(e.target.value)} placeholder="e.g. 1000" style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '10px 14px', outline: 'none', boxSizing: 'border-box' as const }} />
             </div>
           )}
+        </div>
+
+        {/* Extra Requirements */}
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>Extra Requirements</div>
+            <button onClick={addExtra} style={{ background: C.navy, color: C.white, border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Add</button>
+          </div>
+          {extras.length === 0 && <div style={{ color: C.midGray, fontSize: 12 }}>Add extra charges based on site inspection</div>}
+          {extras.map(e => (
+            <div key={e.id} style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                <input value={e.note} onChange={(ev: any) => updateExtra(e.id, 'note', ev.target.value)} placeholder="Observation (e.g. paint stains on outlets)" style={{ flex: 1, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, padding: '8px 12px', outline: 'none', fontFamily: 'inherit' }} />
+                <button onClick={() => removeExtra(e.id)} style={{ background: 'none', border: 'none', color: C.midGray, cursor: 'pointer', fontSize: 18, padding: '0 4px' }}>×</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: C.midGray, fontSize: 12 }}>Extra charge: $</span>
+                <input type="number" value={e.cost} onChange={(ev: any) => updateExtra(e.id, 'cost', ev.target.value)} placeholder="0" style={{ width: 100, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, padding: '6px 10px', outline: 'none', fontFamily: 'inherit' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Inspection Notes */}
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+          <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 10 }}>Inspection Notes</div>
+          <textarea value={inspectionNotes} onChange={(e: any) => setInspectionNotes(e.target.value)} placeholder="Notes from walkthrough inspection... e.g. heavy debris in east wing, bathroom tiles need extra scrubbing, lobby floors need special treatment..." style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, padding: '10px 14px', outline: 'none', boxSizing: 'border-box' as const, resize: 'vertical' as const, minHeight: 100, fontFamily: 'inherit' }} />
         </div>
 
         {/* Crew */}
@@ -270,6 +350,7 @@ function CalculatorTab() {
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 800 }}>${result.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               {result.discount > 0 && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>Includes {frequency === 'weekly' ? '15%' : '10%'} discount — saved ${result.discount.toFixed(2)}</div>}
             </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
               <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16 }}>
                 <div style={{ color: C.red, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, marginBottom: 4 }}>60% Deposit</div>
@@ -282,12 +363,14 @@ function CalculatorTab() {
                 <div style={{ color: C.midGray, fontSize: 11 }}>Due on completion</div>
               </div>
             </div>
+
             <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
               <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Price Breakdown</div>
               {[
                 { label: 'Base (sq ft)', val: result.base },
                 { label: 'Rooms', val: result.rooms },
                 { label: 'Add-Ons', val: result.addons },
+                { label: 'Extra Requirements', val: result.extrasCost },
                 { label: 'Frequency Discount', val: -result.discount },
               ].filter(r => r.val !== 0).map(r => (
                 <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${C.lightGray}`, fontSize: 13 }}>
@@ -295,7 +378,14 @@ function CalculatorTab() {
                   <span style={{ color: r.val < 0 ? '#109648' : C.navy, fontWeight: 600 }}>{r.val < 0 ? '-' : ''}${Math.abs(r.val).toFixed(2)}</span>
                 </div>
               ))}
+              {extras.filter(e => e.note).map(e => (
+                <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0 4px 12px', fontSize: 12, borderBottom: `1px solid ${C.lightGray}` }}>
+                  <span style={{ color: C.midGray }}>↳ {e.note}</span>
+                  <span style={{ color: C.navy }}>${Number(e.cost || 0).toFixed(2)}</span>
+                </div>
+              ))}
             </div>
+
             <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
               <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Crew Pay (40% Pool)</div>
               {[
@@ -309,30 +399,41 @@ function CalculatorTab() {
                 </div>
               ))}
             </div>
-            {isPostConstruction && (
-              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
-                <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>3-Day Schedule</div>
-                {[
-                  { day: 'Day 1', stage: 'Stage 1 — Rough Clean', hours: '6-7 hours', desc: 'Debris removal, sweep, basic clean' },
-                  { day: 'Day 2', stage: 'Stage 2 — Final Clean', hours: '8-9 hours', desc: 'Deep detailed clean, windows, fixtures' },
-                  { day: 'Day 3', stage: 'Stage 3 — Touch-Up & Handover', hours: '4-5 hours', desc: 'Final pass, wax floors, hand over to client' },
-                ].map(d => (
-                  <div key={d.day} style={{ display: 'flex', gap: 12, marginBottom: 10, padding: '10px 12px', background: C.offWhite, borderRadius: 8 }}>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 800, color: C.navy, minWidth: 45 }}>{d.day}</div>
-                    <div>
-                      <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{d.stage}</div>
-                      <div style={{ color: C.red, fontSize: 12, fontWeight: 600 }}>{d.hours} · {numCleaners} cleaners</div>
-                      <div style={{ color: C.midGray, fontSize: 11 }}>{d.desc}</div>
-                    </div>
-                  </div>
-                ))}
+
+            {/* Schedule */}
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Schedule Estimate</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                <div>
+                  <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>
+                    Number of Days
+                    <span style={{ color: C.midGray, fontWeight: 400, textTransform: 'none' as const, fontSize: 10 }}> (est. {result.estimatedDays})</span>
+                  </label>
+                  <input type="number" value={editDays || result.finalDays} onChange={(e: any) => setEditDays(Number(e.target.value))} min={1} style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '8px 12px', outline: 'none', boxSizing: 'border-box' as const }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', color: C.navy, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Hours Per Day</label>
+                  <input type="number" value={editHoursPerDay || result.hoursPerDay} onChange={(e: any) => setEditHoursPerDay(Number(e.target.value))} min={1} max={12} style={{ width: '100%', background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, padding: '8px 12px', outline: 'none', boxSizing: 'border-box' as const }} />
+                </div>
               </div>
-            )}
-            {isCommercial && (
+              <div style={{ background: C.offWhite, borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: C.navy, fontWeight: 600 }}>
+                Total: {result.finalDays} days × {result.hoursPerDay}h × {numCleaners} cleaners = {result.totalHours}h total work
+              </div>
+              {scheduleStages(result.finalDays).map(d => (
+                <div key={d.day} style={{ display: 'flex', gap: 12, marginBottom: 10, padding: '10px 12px', background: C.offWhite, borderRadius: 8 }}>
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 800, color: C.navy, minWidth: 45 }}>{d.day}</div>
+                  <div>
+                    <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{d.stage}</div>
+                    <div style={{ color: C.midGray, fontSize: 11 }}>{d.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {inspectionNotes && (
               <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
-                <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 14 }}>Time Estimate</div>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 800, color: C.navy }}>{(result.hoursPerCleaner / numCleaners).toFixed(1)} hours</div>
-                <div style={{ color: C.midGray, fontSize: 13 }}>Estimated with {numCleaners} cleaner{numCleaners > 1 ? 's' : ''}</div>
+                <div style={{ color: C.navy, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 10 }}>Inspection Notes</div>
+                <div style={{ color: C.darkGray, fontSize: 13, lineHeight: 1.6 }}>{inspectionNotes}</div>
               </div>
             )}
           </>
